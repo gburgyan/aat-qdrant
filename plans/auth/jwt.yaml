@@ -1,0 +1,105 @@
+# JWT access, with the tokens env.yaml carries (signed with the local key; see scripts/mint-jwt.sh).
+#
+# A global read token lists but can't write. A token for one collection, aat-qdrant-rbac, writes
+# that collection's points, sees only that collection in a listing rather than being refused, is
+# PERMISSION_DENIED on any other collection, and can't delete even its own: that needs global
+# access. An expired token is PERMISSION_DENIED too, not UNAUTHENTICATED: Qdrant can verify it and
+# declines it.
+#
+# The token names its collection, so this plan uses that fixed name and must not run beside itself.
+intent:
+  goal: expired
+  description: Read and collection-scoped JWTs do what their claims say; an expired one is refused
+
+execution:
+  steps:
+    - id: rbac
+      node: createCollection
+      values:
+        collectionName: aat-qdrant-rbac
+
+    - id: other
+      node: createCollection
+
+    - id: readList
+      node: jwtReadListCollections
+      dependsOn: [rbac, other]
+      assertions:
+        mechanical:
+          - type: predicate
+            expr: ourCount >= 2
+
+    - id: readWrite
+      node: jwtReadUpsertPoints
+      dependsOn: [rbac]
+      values:
+        collectionName: {from: rbac.collectionName}
+      expectFailure:
+        status: [PERMISSION_DENIED]
+        description: a read token can't write
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: message
+            value: "Forbidden: Global manage access is required"
+
+    - id: rbacWrite
+      node: jwtRbacUpsertPoints
+      dependsOn: [rbac]
+      values:
+        collectionName: {from: rbac.collectionName}
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: status
+            value: Completed
+
+    - id: rbacList
+      node: jwtRbacListCollections
+      dependsOn: [rbac, other]
+      description: Only the token's own collection, though two of ours exist
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: names
+            value: [aat-qdrant-rbac]
+
+    - id: rbacOther
+      node: jwtRbacGetCollection
+      dependsOn: [other]
+      values:
+        collectionName: {from: other.collectionName}
+      expectFailure:
+        status: [PERMISSION_DENIED]
+        description: the token names a different collection
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: message
+            value: "Forbidden: Access to collection {{collectionName}} is required"
+
+    - id: rbacDelete
+      node: jwtRbacDeleteCollection
+      dependsOn: [rbacWrite, rbacList]
+      values:
+        collectionName: {from: rbac.collectionName}
+      expectFailure:
+        status: [PERMISSION_DENIED]
+        description: read-write on a collection doesn't extend to deleting it
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: message
+            value: "Forbidden: Global access is required"
+
+    - id: expired
+      node: jwtExpiredListCollections
+      isGoal: true
+      expectFailure:
+        status: [PERMISSION_DENIED]
+        description: the token expired in 1970
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: message
+            value: ExpiredSignature

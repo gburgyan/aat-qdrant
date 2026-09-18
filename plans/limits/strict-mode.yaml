@@ -1,0 +1,78 @@
+# A collection's strict mode, which refuses what would be expensive. A limit over the maximum and a
+# filter on an unindexed field are INVALID_ARGUMENT, each saying what to change. A read over the
+# rate limit is RESOURCE_EXHAUSTED; Qdrant sends retry-after: 60 with it, in the trailers rather
+# than the headers, which the archive records. The limits are the collection's own, so the plan
+# spends only its own collection's budget.
+intent:
+  goal: limited
+  description: Strict mode refuses an oversized limit and an unindexed filter, then rate-limits reads
+
+execution:
+  steps:
+    - id: create
+      node: createCollection
+
+    - id: upsert
+      node: upsertPoints
+
+    - id: strict
+      node: updateStrictMode
+      dependsOn: [upsert]
+      values:
+        strictModeConfig: {default: {enabled: true, maxQueryLimit: 5, unindexedFilteringRetrieve: false}}
+
+    - id: tooMany
+      node: queryPoints
+      dependsOn: [strict]
+      values:
+        limit: 10
+      expectFailure:
+        status: [INVALID_ARGUMENT]
+        description: the limit is over strict mode's maximum of 5
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: message
+            value: 'Bad request: Limit exceeded 10 > 5 for "limit". Help: Reduce the "limit" parameter to or below 5.'
+
+    - id: unindexed
+      node: queryPoints
+      dependsOn: [tooMany]
+      values:
+        filter: {default: {must: [{field: {key: city, match: {keyword: Berlin}}}]}}
+      expectFailure:
+        status: [INVALID_ARGUMENT]
+        description: strict mode wants an index on a filtered field
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: message
+            value: 'Bad request: Index required but not found for "city" of one of the following types: [keyword]. Help: Create an index for this key or use a different filter.'
+
+    - id: rateLimit
+      node: updateStrictMode
+      dependsOn: [unindexed]
+      values:
+        strictModeConfig: {default: {enabled: true, readRateLimit: 1}}
+
+    - id: firstRead
+      node: countPoints
+      dependsOn: [rateLimit]
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: count
+            value: "6"
+
+    - id: limited
+      node: countPoints
+      isGoal: true
+      dependsOn: [firstRead]
+      expectFailure:
+        status: [RESOURCE_EXHAUSTED]
+        description: one read a minute, and the first read spent it
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: message
+            value: "Rate limiting exceeded: Read rate limit exceeded: Operation requires 1 tokens but only 0.0 were available. Retry after 60s"

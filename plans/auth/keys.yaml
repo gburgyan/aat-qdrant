@@ -1,0 +1,56 @@
+# What a request without the key gets. Qdrant's two health checks answer anyway; everything else
+# is UNAUTHENTICATED, with a message that tells a missing credential from a wrong one. Over REST the
+# same refusal is a 401 with a plain-text body rather than JSON.
+intent:
+  goal: restNoKey
+  description: Health checks need no key; without one, or with a wrong one, calls are UNAUTHENTICATED
+
+execution:
+  steps:
+    - id: health
+      node: anonHealthCheck
+      assertions:
+        mechanical:
+          - type: status
+            expect: OK
+
+    - id: grpcHealth
+      node: anonGrpcHealthCheck
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: status
+            value: SERVING
+
+    - id: noKey
+      node: anonListCollections
+      expectFailure:
+        status: [UNAUTHENTICATED]
+        description: no api-key and no bearer token
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: message
+            value: Must provide an API key or an Authorization bearer token
+
+    - id: wrongKey
+      node: wrongKeyListCollections
+      expectFailure:
+        status: [UNAUTHENTICATED]
+        description: a key Qdrant doesn't know
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: message
+            value: Invalid API key or JWT
+
+    - id: create
+      node: createCollection
+
+    - id: restNoKey
+      node: restAnonGetCollection
+      isGoal: true
+      dependsOn: [create]
+      expectFailure:
+        status: [401]
+        description: the same refusal over REST, whose body is plain text

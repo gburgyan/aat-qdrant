@@ -1,0 +1,11 @@
+adapter: updateStrictMode
+protocol: grpc
+
+request:
+  rpc: qdrant.Collections/Update
+  message: |
+    {"collectionName": "{{collectionName}}", "strictModeConfig": {{strictModeConfig}}}
+
+response:
+  extract:
+    updated: result

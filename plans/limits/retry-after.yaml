@@ -1,0 +1,39 @@
+# A rate-limited read, retried the way Qdrant asks. The retry rule names the gRPC status,
+# RESOURCE_EXHAUSTED, and AAT waits the retry-after Qdrant sends in the trailers, 60 seconds, by
+# which time the collection's one read a minute has come back. The step then passes on its second
+# attempt. This plan takes a minute; the wait is the point.
+intent:
+  goal: retried
+  description: A rate-limited read is retried on RESOURCE_EXHAUSTED after the trailer's retry-after
+
+execution:
+  steps:
+    - id: create
+      node: createCollection
+
+    - id: upsert
+      node: upsertPoints
+
+    - id: rateLimit
+      node: updateStrictMode
+      dependsOn: [upsert]
+      values:
+        strictModeConfig: {default: {enabled: true, readRateLimit: 1}}
+
+    - id: spend
+      node: countPoints
+      dependsOn: [rateLimit]
+      description: The minute's one read
+
+    - id: retried
+      node: countPoints
+      isGoal: true
+      dependsOn: [spend]
+      retry:
+        max: 1
+        on: [RESOURCE_EXHAUSTED]
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: count
+            value: "6"

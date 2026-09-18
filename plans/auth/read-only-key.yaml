@@ -1,0 +1,55 @@
+# The read-only key reads everything and writes nothing: a write is PERMISSION_DENIED, not
+# UNAUTHENTICATED, because the key is valid and only its rights fall short.
+intent:
+  goal: noDelete
+  description: The read-only key reads freely and is PERMISSION_DENIED on every write
+
+execution:
+  steps:
+    - id: create
+      node: createCollection
+
+    - id: upsert
+      node: upsertPoints
+
+    - id: list
+      node: readOnlyListCollections
+      dependsOn: [upsert]
+      assertions:
+        mechanical:
+          - type: predicate
+            expr: ourCount >= 1
+
+    - id: count
+      node: readOnlyCountPoints
+      dependsOn: [upsert]
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: count
+            value: "6"
+
+    - id: noWrite
+      node: readOnlyUpsertPoints
+      dependsOn: [upsert]
+      expectFailure:
+        status: [PERMISSION_DENIED]
+        description: the read-only key can't write points
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: message
+            value: "Forbidden: Global manage access is required"
+
+    - id: noDelete
+      node: readOnlyDeleteCollection
+      isGoal: true
+      dependsOn: [noWrite, list, count]
+      expectFailure:
+        status: [PERMISSION_DENIED]
+        description: nor delete a collection
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: message
+            value: "Forbidden: Global manage access is required"

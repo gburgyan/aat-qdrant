@@ -16,7 +16,7 @@ oas: openapi/openapi.json
 nodes:
   # --- Health ----------------------------------------------------------------
 
-  healthCheck:
+  healthCheck: &healthCheck
     description: >-
       Qdrant's own health check, which answers with its version. It is one of the two calls Qdrant
       serves without a key. Proven by plans/health/checks.yaml.
@@ -33,7 +33,7 @@ nodes:
         type: string
         optional: true
 
-  grpcHealthCheck:
+  grpcHealthCheck: &grpcHealthCheck
     description: >-
       The standard gRPC health service (grpc.health.v1.Health/Check), the other call served without
       a key. An empty service name asks about the server as a whole. Proven by
@@ -116,7 +116,7 @@ nodes:
     cleanup:
       node: deleteCollection
 
-  getCollection:
+  getCollection: &getCollection
     description: >-
       Read a collection's status and configuration. Over gRPC the status is the enum name, `Green`;
       over REST it is `green`. Proven by plans/collections/lifecycle.yaml.
@@ -163,7 +163,7 @@ nodes:
         optional: true
         description: The note tag in the collection's metadata, which updateCollection sets
 
-  listCollections:
+  listCollections: &listCollections
     description: >-
       List every collection on the server. The transform counts this project's (named aat-qdrant-*),
       which is what the guard asserts is zero. Proven by plans/zz-guard/no-stray-collections.yaml.
@@ -219,7 +219,7 @@ nodes:
       - name: updated
         type: boolean
 
-  deleteCollection:
+  deleteCollection: &deleteCollection
     description: >-
       Delete a collection and everything in it; the cleanup for createCollection. Deleting one that
       doesn't exist answers `result: false` rather than NOT_FOUND. Proven by
@@ -558,7 +558,7 @@ nodes:
 
   # --- Points ----------------------------------------------------------------
 
-  upsertPoints:
+  upsertPoints: &upsertPoints
     description: >-
       Insert or replace points. Each is a qdrant.PointStruct in proto3 JSON: an id that is a
       oneof of a uint64 (`{"num": "1"}`) or a UUID (`{"uuid": "..."}`), vectors, and a payload
@@ -658,7 +658,7 @@ nodes:
       - name: status
         type: string
 
-  countPoints:
+  countPoints: &countPoints
     description: >-
       Count points, all of them or those a filter matches. The count is a uint64, so it arrives
       as a string. Proven by plans/points/delete-and-count.yaml.
@@ -1376,9 +1376,115 @@ nodes:
       - name: count
         type: integer
 
+  # --- Credentials and limits ------------------------------------------------
+  # Each node here is another node sent with a different credential: env.yaml routes its name
+  # prefix (anon, wrongKey, readOnly, jwtRead, jwtRbac, jwtExpired) to that credential, and the
+  # node reuses the other's template, inputs, and outputs through a YAML merge key.
+
+  anonHealthCheck:
+    <<: *healthCheck
+    description: healthCheck with no credential, which Qdrant serves anyway. Proven by plans/auth/keys.yaml.
+    tags: [health, auth]
+
+  anonGrpcHealthCheck:
+    <<: *grpcHealthCheck
+    description: grpcHealthCheck with no credential, which Qdrant serves anyway. Proven by plans/auth/keys.yaml.
+    tags: [health, auth]
+
+  anonListCollections:
+    <<: *listCollections
+    description: listCollections with no credential, which is UNAUTHENTICATED. Proven by plans/auth/keys.yaml.
+    tags: [auth]
+
+  wrongKeyListCollections:
+    <<: *listCollections
+    description: listCollections with a key Qdrant doesn't know, also UNAUTHENTICATED. Proven by plans/auth/keys.yaml.
+    tags: [auth]
+
+  readOnlyListCollections:
+    <<: *listCollections
+    description: listCollections with the read-only key, which reads freely. Proven by plans/auth/read-only-key.yaml.
+    tags: [auth]
+
+  readOnlyCountPoints:
+    <<: *countPoints
+    description: countPoints with the read-only key. Proven by plans/auth/read-only-key.yaml.
+    tags: [auth]
+
+  readOnlyUpsertPoints:
+    <<: *upsertPoints
+    description: upsertPoints with the read-only key, which is PERMISSION_DENIED. Proven by plans/auth/read-only-key.yaml.
+    tags: [auth]
+
+  readOnlyDeleteCollection:
+    <<: *deleteCollection
+    description: deleteCollection with the read-only key, which is PERMISSION_DENIED. Proven by plans/auth/read-only-key.yaml.
+    tags: [auth]
+
+  jwtReadListCollections:
+    <<: *listCollections
+    description: listCollections with a global read-only JWT. Proven by plans/auth/jwt.yaml.
+    tags: [auth]
+
+  jwtReadUpsertPoints:
+    <<: *upsertPoints
+    description: upsertPoints with a global read-only JWT, which is PERMISSION_DENIED. Proven by plans/auth/jwt.yaml.
+    tags: [auth]
+
+  jwtRbacListCollections:
+    <<: *listCollections
+    description: >-
+      listCollections with a JWT for one collection, which lists that collection alone rather than
+      being refused. Proven by plans/auth/jwt.yaml.
+    tags: [auth]
+
+  jwtRbacUpsertPoints:
+    <<: *upsertPoints
+    description: upsertPoints with a JWT for this collection, which may write its points. Proven by plans/auth/jwt.yaml.
+    tags: [auth]
+
+  jwtRbacGetCollection:
+    <<: *getCollection
+    description: getCollection with a JWT for another collection, which is PERMISSION_DENIED. Proven by plans/auth/jwt.yaml.
+    tags: [auth]
+
+  jwtRbacDeleteCollection:
+    <<: *deleteCollection
+    description: >-
+      deleteCollection with a read-write JWT for that very collection, which is still
+      PERMISSION_DENIED: deleting a collection needs global access. Proven by plans/auth/jwt.yaml.
+    tags: [auth]
+
+  jwtExpiredListCollections:
+    <<: *listCollections
+    description: >-
+      listCollections with an expired JWT, which is PERMISSION_DENIED, not UNAUTHENTICATED: Qdrant
+      reads a token it can verify but won't honour as forbidden. Proven by plans/auth/jwt.yaml.
+    tags: [auth]
+
+  updateStrictMode:
+    description: >-
+      Turn on a collection's strict mode, which refuses expensive requests (a limit over the
+      maximum, a filter on an unindexed field) as INVALID_ARGUMENT and rate-limits reads as
+      RESOURCE_EXHAUSTED, with a retry-after trailer. Proven by plans/limits/strict-mode.yaml.
+    adapter: updateStrictMode
+    proto: qdrant.Collections/Update
+    tags: [collections, limits]
+    requires: [collection]
+    inputs:
+      - name: collectionName
+        type: string
+        default: {from: createCollection.collectionName}
+      - name: strictModeConfig
+        type: StrictModeConfig
+        description: A qdrant.StrictModeConfig; enabled must be true for the rest to apply
+    outputs:
+      - name: updated
+        type: boolean
+
   # --- REST cross-checks -----------------------------------------------------
 
-  restGetCollection:
+  restGetCollection: &restGetCollection
     description: >-
       GET /collections/{collection_name}: the collection getCollection reads, over REST. The status
       is lowercase here, sizes are JSON numbers rather than strings, and metadata values are plain
@@ -1477,3 +1583,10 @@ nodes:
     outputs:
       - name: ids
         type: integer[]
+
+  restAnonGetCollection:
+    <<: *restGetCollection
+    description: >-
+      restGetCollection with no credential: a 401 whose body is plain text, not JSON. Proven by
+      plans/auth/keys.yaml.
+    tags: [auth, rest]
