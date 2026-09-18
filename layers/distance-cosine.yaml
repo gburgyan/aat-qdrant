@@ -1,0 +1,6 @@
+name: distance-cosine
+description: >-
+  Cosine similarity: vectors are normalized to unit length when stored, and a higher score is nearer.
+selectionHint: Collections compared by Cosine distance
+inputs:
+  createCollection.distance: Cosine

@@ -1,0 +1,6 @@
+name: distance-dot
+description: >-
+  Dot product: vectors are stored as written, and a higher score is nearer.
+selectionHint: Collections compared by Dot distance
+inputs:
+  createCollection.distance: Dot

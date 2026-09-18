@@ -1,0 +1,6 @@
+name: distance-euclid
+description: >-
+  Euclidean distance: vectors are stored as written, and a lower score is nearer, so an exact match scores 0.
+selectionHint: Collections compared by Euclid distance
+inputs:
+  createCollection.distance: Euclid

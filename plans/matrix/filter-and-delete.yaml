@@ -1,0 +1,32 @@
+# Deleting by a payload filter, in every cell of the grid: the filter doesn't care what distance the
+# collection uses or what kind of id the points have. Run it with the layer groups in
+# matrix/round-trip.yaml.
+intent:
+  goal: remaining
+  description: A filter deletes two countries' cities whatever the distance or id kind
+
+execution:
+  steps:
+    - id: create
+      node: createCollection
+
+    - id: upsert
+      node: upsertPoints
+
+    - id: delete
+      node: deletePoints
+      dependsOn: [upsert]
+      values:
+        filter: {default: {must: [{field: {key: country, match: {keywords: {strings: [USA, India]}}}}]}}
+
+    - id: remaining
+      node: scrollPoints
+      isGoal: true
+      dependsOn: [delete]
+      values:
+        limit: 10
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: cities
+            value: [Berlin, London, Moscow, Beijing]

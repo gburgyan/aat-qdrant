@@ -1,0 +1,6 @@
+name: distance-manhattan
+description: >-
+  Manhattan distance: the sum of the coordinate differences; a lower score is nearer, and an exact match scores 0.
+selectionHint: Collections compared by Manhattan distance
+inputs:
+  createCollection.distance: Manhattan

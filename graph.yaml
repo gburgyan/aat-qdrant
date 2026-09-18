@@ -79,6 +79,10 @@ nodes:
       - name: collectionName
         type: string
         fromInput: collectionName
+      - name: distance
+        type: string
+        fromInput: distance
+        description: The distance the collection was created with, which a layer may have chosen
     satisfies: [collection]
     cleanup:
       node: deleteCollection

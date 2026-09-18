@@ -1,0 +1,57 @@
+# One plan for every distance and both kinds of id. It sets neither the collection's distance nor
+# the points, so a layer can: run it across the grid with
+#
+#   aat run batch matrix --layer-group distance-cosine,distance-dot,distance-euclid,distance-manhattan \
+#     --layer-group id-num,id-uuid --parallel 4
+#
+# What it asserts holds in every cell: six points go in and come back in id order, and searching
+# with Berlin's own vector finds Berlin first, whether nearer means a higher score (cosine, dot) or
+# a lower one (Euclid, Manhattan, where the exact match scores 0). Run without layers, it uses the
+# graph's defaults: cosine and numeric ids.
+intent:
+  goal: nearestIsSelf
+  description: The dataset goes in and comes back, and a point is its own nearest neighbour
+
+execution:
+  steps:
+    - id: create
+      node: createCollection
+
+    - id: upsert
+      node: upsertPoints
+
+    - id: configured
+      node: getCollection
+      dependsOn: [upsert]
+      description: The collection has the distance the layer chose
+      assertions:
+        mechanical:
+          - type: predicate
+            expr: 'distance == "{{create.distance}}" && pointsCount == "6"'
+
+    - id: inOrder
+      node: scrollPoints
+      dependsOn: [upsert]
+      values:
+        limit: 10
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: cities
+            value: [Berlin, London, Moscow, New York, Beijing, Mumbai]
+          - type: fieldEquals
+            path: nextUuid
+            value: ""
+
+    - id: nearestIsSelf
+      node: queryPoints
+      isGoal: true
+      dependsOn: [upsert]
+      values:
+        query: {default: {nearest: {dense: {data: [0.05, 0.61, 0.76, 0.74]}}}}
+        limit: 1
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: cities
+            value: [Berlin]

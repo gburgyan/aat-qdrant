@@ -1,0 +1,14 @@
+name: id-num
+description: >-
+  Qdrant's quickstart dataset with numeric point ids 1 to 6: the PointId oneof's uint64 member,
+  written {"num": "1"}.
+selectionHint: Points identified by number
+inputs:
+  upsertPoints.points:
+    value:
+      - {id: {num: "1"}, vectors: {vector: {dense: {data: [0.05, 0.61, 0.76, 0.74]}}}, payload: {city: {stringValue: Berlin}, country: {stringValue: Germany}, population: {integerValue: "3645000"}}}
+      - {id: {num: "2"}, vectors: {vector: {dense: {data: [0.19, 0.81, 0.75, 0.11]}}}, payload: {city: {stringValue: London}, country: {stringValue: UK}, population: {integerValue: "8982000"}}}
+      - {id: {num: "3"}, vectors: {vector: {dense: {data: [0.36, 0.55, 0.47, 0.94]}}}, payload: {city: {stringValue: Moscow}, country: {stringValue: Russia}, population: {integerValue: "12640000"}}}
+      - {id: {num: "4"}, vectors: {vector: {dense: {data: [0.18, 0.01, 0.85, 0.80]}}}, payload: {city: {stringValue: New York}, country: {stringValue: USA}, population: {integerValue: "8336000"}}}
+      - {id: {num: "5"}, vectors: {vector: {dense: {data: [0.24, 0.18, 0.22, 0.44]}}}, payload: {city: {stringValue: Beijing}, country: {stringValue: China}, population: {integerValue: "21540000"}}}
+      - {id: {num: "6"}, vectors: {vector: {dense: {data: [0.35, 0.08, 0.11, 0.44]}}}, payload: {city: {stringValue: Mumbai}, country: {stringValue: India}, population: {integerValue: "12480000"}}}

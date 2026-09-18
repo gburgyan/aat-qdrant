@@ -6,6 +6,7 @@ description: >-
 tags: [vector-database, grpc, qdrant, docker]
 graph: graph.yaml
 templates: templates/
+layers: layers/
 plans: plans/
 # Qdrant's published protos, compiled by proto/build.sh; see the README for the pin.
 proto: qdrant.protoset
