@@ -5,7 +5,7 @@
 # Usage:
 #   demos/run.sh
 #
-# Needs: aat on PATH (with gRPC support), Docker, jq, and node and npm with
+# Needs: aat 0.3.0 or later on PATH, Docker, jq, and node and npm with
 # Playwright's Chromium. It uses port 9131 for the web UI. The limits plan
 # waits out nothing here: the screenshot is of the refusal, not of the retry.
 #

@@ -10,8 +10,7 @@ Every behavior it describes is proven by a plan that asserts it.
 70 seconds (60 of them one deliberate wait), 6 layers on two axes, and two plans outside the batch:
 a drift finding and a cluster-only plan.
 
-> **AAT's gRPC support isn't released yet.** It is on aat's `grpc-support` branch. Build it there
-> with `make build` and put the `aat` it writes on your PATH. This project is what that support was
+> **Needs AAT v0.3.0 or later,** the first release with gRPC. This project is what that support was
 > stress-tested against; see [How this was built](#how-this-was-built).
 
 ```
@@ -97,7 +96,7 @@ To start a project of your own:
 4. Route to `grpc://` or `grpcs://`.
 5. Run `aat validate --strict`, which says which paths and fields are wrong before the first call.
 
-AAT's gRPC guide (`docs/user/grpc.md` on the `grpc-support` branch) has the details.
+AAT's [gRPC guide](https://gburgyan.github.io/aat/grpc/) has the details.
 
 ## Three ways to read this project
 
@@ -121,7 +120,8 @@ The sibling projects drive REST APIs: [aat-duffel](https://github.com/gburgyan/a
 ### What you need
 
 - Docker with Compose v2.
-- `aat` built from aat's `grpc-support` branch (`make build`), on your PATH.
+- **AAT v0.3.0 or later,** the first release with gRPC. Install it with Homebrew, a release archive,
+  Docker, or `go install` — see [Install](https://gburgyan.github.io/aat/install/).
 - Optionally, [grpcurl](https://github.com/fullstorydev/grpcurl) to poke at the server, and protoc to
   rebuild the descriptor set.
 
@@ -459,7 +459,8 @@ the spec, and the dropped search endpoint in `drift/`.
 ## How this was built
 
 This project was built to stress-test AAT's gRPC support against an API nobody on the AAT side
-wrote. Each gap it found was fixed on aat's `grpc-support` branch before the project went on:
+wrote. Each gap it found was fixed in aat before the project went on, and all of them shipped in
+v0.3.0:
 
 | AAT commit | What changed | Found by |
 |---|---|---|

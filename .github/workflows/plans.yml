@@ -1,8 +1,5 @@
 # Every plan, against the pinned Qdrant, on every push. Nothing here needs a secret: the container
 # is started by the job and the keys are the local ones in compose.yaml.
-#
-# AAT's gRPC support isn't released yet, so aat is built from its grpc-support branch. Once it is,
-# this can download a release instead, as the sibling projects do.
 name: plans
 
 on:
@@ -10,7 +7,7 @@ on:
   workflow_dispatch:
 
 env:
-  AAT_REF: grpc-support
+  AAT_VERSION: 0.3.0
 
 jobs:
   plans:
@@ -19,13 +16,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-go@v5
-        with:
-          go-version: stable
-
       - name: Install aat
         run: |
-          go install "github.com/gburgyan/aat/cmd/aat@${AAT_REF}"
+          curl -fsSL "https://github.com/gburgyan/aat/releases/download/v${AAT_VERSION}/aat_linux_amd64.tar.gz" | sudo tar -xz -C /usr/local/bin aat
           aat --version
 
       - name: Start Qdrant, standalone and the one-node cluster
