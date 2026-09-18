@@ -1,0 +1,18 @@
+name: qdrant
+description: >-
+  The Qdrant vector database over gRPC, validated against Qdrant's own protos, with REST
+  cross-checks validated against Qdrant's own OpenAPI spec, run against a local Docker container
+  — each behavior proven by a plan.
+tags: [vector-database, grpc, qdrant, docker]
+graph: graph.yaml
+templates: templates/
+plans: plans/
+# Qdrant's published protos, compiled by proto/build.sh; see the README for the pin.
+proto: qdrant.protoset
+# Qdrant's published OpenAPI spec, vendored verbatim, for the MCP server's spec tools. The graph
+# names it too, which is what runtime validation of the REST nodes reads.
+oas: openapi/openapi.json
+environment: env.yaml
+defaultEnvironment: local
+archives: _output/runs
+traces: _output/traces

@@ -1,0 +1,219 @@
+version: "1.0.0"
+title: Qdrant over gRPC
+description: >-
+  The Qdrant vector database, driven over its gRPC API (qdrant.Collections, qdrant.Points,
+  qdrant.Snapshots) against a local container. A handful of REST nodes, named rest*, read the same
+  collections back over HTTP to show what each protocol makes of the same data.
+
+# Qdrant's own protos, compiled by proto/build.sh. aat validate checks every gRPC node against
+# them without a server running.
+proto: qdrant.protoset
+
+# Qdrant's own OpenAPI spec, for the rest* nodes: aat validate checks them against it, and at run
+# time a response it doesn't allow fails the step (settings.oasValidation in env.yaml).
+oas: openapi/openapi.json
+
+nodes:
+  # --- Health ----------------------------------------------------------------
+
+  healthCheck:
+    description: >-
+      Qdrant's own health check, which answers with its version. It is one of the two calls Qdrant
+      serves without a key. Proven by plans/health/checks.yaml.
+    adapter: healthCheck
+    proto: qdrant.Qdrant/HealthCheck
+    tags: [health]
+    outputs:
+      - name: title
+        type: string
+      - name: version
+        type: string
+        display: Qdrant
+      - name: commit
+        type: string
+        optional: true
+
+  grpcHealthCheck:
+    description: >-
+      The standard gRPC health service (grpc.health.v1.Health/Check), the other call served without
+      a key. An empty service name asks about the server as a whole. Proven by
+      plans/health/checks.yaml.
+    adapter: grpcHealthCheck
+    proto: grpc.health.v1.Health/Check
+    tags: [health]
+    inputs:
+      - name: service
+        type: string
+        optional: true
+        description: A service to ask about, such as qdrant.Points; empty or absent asks about the server
+    outputs:
+      - name: status
+        type: string
+        description: SERVING, NOT_SERVING, UNKNOWN, or SERVICE_UNKNOWN
+
+  # --- Collections -----------------------------------------------------------
+
+  createCollection:
+    description: >-
+      Create a collection of dense vectors. The name is the client's to choose and Qdrant answers
+      only `result: true`, so the name comes back as an output echoed from the input. Every
+      collection this project creates is named aat-qdrant-*, which is what the guard looks for, and
+      carries `project: aat-qdrant` in its metadata. Proven by plans/collections/lifecycle.yaml.
+    adapter: createCollection
+    proto: qdrant.Collections/Create
+    tags: [collections]
+    inputs:
+      - name: collectionName
+        type: string
+        default: {value: "aat-qdrant-{{random 8}}"}
+      - name: vectorSize
+        type: integer
+        default: {value: 4}
+        description: Dimensions of every vector in the collection
+      - name: distance
+        type: enum[Cosine, Euclid, Dot, Manhattan]
+        default: {value: Cosine}
+    outputs:
+      - name: created
+        type: boolean
+      - name: collectionName
+        type: string
+        fromInput: collectionName
+    satisfies: [collection]
+    cleanup:
+      node: deleteCollection
+
+  getCollection:
+    description: >-
+      Read a collection's status and configuration. Over gRPC the status is the enum name, `Green`;
+      over REST it is `green`. Proven by plans/collections/lifecycle.yaml.
+    adapter: getCollection
+    proto: qdrant.Collections/Get
+    tags: [collections]
+    requires: [collection]
+    inputs:
+      - name: collectionName
+        type: string
+        default: {from: createCollection.collectionName}
+    outputs:
+      - name: status
+        type: string
+        description: Green, Yellow, Grey, or Red
+      - name: pointsCount
+        type: integer
+        optional: true
+      - name: segmentsCount
+        type: integer
+      - name: vectorSize
+        type: integer
+      - name: distance
+        type: string
+      - name: indexingThreshold
+        type: integer
+      - name: project
+        type: string
+        optional: true
+        description: The project tag in the collection's metadata
+      - name: note
+        type: string
+        optional: true
+        description: The note tag in the collection's metadata, which updateCollection sets
+
+  listCollections:
+    description: >-
+      List every collection on the server. The transform counts this project's (named aat-qdrant-*),
+      which is what the guard asserts is zero. Proven by plans/zz-guard/no-stray-collections.yaml.
+    adapter: listCollections
+    proto: qdrant.Collections/List
+    tags: [collections]
+    outputs:
+      - name: names
+        type: string[]
+      - name: count
+        type: integer
+      - name: ourCount
+        type: integer
+      - name: ours
+        type: string[]
+
+  collectionExists:
+    description: >-
+      Whether a collection exists. `false` is a real answer rather than an error, and it arrives as
+      a present `false`, not an absent field. Proven by plans/collections/missing.yaml.
+    adapter: collectionExists
+    proto: qdrant.Collections/CollectionExists
+    tags: [collections]
+    inputs:
+      - name: collectionName
+        type: string
+        default: {from: createCollection.collectionName}
+    outputs:
+      - name: exists
+        type: boolean
+
+  updateCollection:
+    description: >-
+      Change a collection's optimizer settings and metadata in place. Metadata is merged: a key
+      the update doesn't name keeps its value. Proven by plans/collections/update-optimizers.yaml.
+    adapter: updateCollection
+    proto: qdrant.Collections/Update
+    tags: [collections]
+    requires: [collection]
+    inputs:
+      - name: collectionName
+        type: string
+        default: {from: createCollection.collectionName}
+      - name: indexingThreshold
+        type: integer
+        default: {value: 20000}
+        description: Vectors a segment holds before Qdrant builds its HNSW index, in kilobytes
+      - name: note
+        type: string
+        default: {value: updated by aat-qdrant}
+        description: Written to the collection's metadata as `note`
+    outputs:
+      - name: updated
+        type: boolean
+
+  deleteCollection:
+    description: >-
+      Delete a collection and everything in it; the cleanup for createCollection. Deleting one that
+      doesn't exist answers `result: false` rather than NOT_FOUND. Proven by
+      plans/collections/lifecycle.yaml.
+    adapter: deleteCollection
+    proto: qdrant.Collections/Delete
+    tags: [collections, cleanup]
+    inputs:
+      - name: collectionName
+        type: string
+        default: {from: createCollection.collectionName}
+    outputs:
+      - name: deleted
+        type: boolean
+
+  # --- REST cross-checks -----------------------------------------------------
+
+  restGetCollection:
+    description: >-
+      GET /collections/{collection_name}: the collection getCollection reads, over REST. The status
+      is lowercase here, sizes are JSON numbers rather than strings, and metadata values are plain
+      JSON rather than Qdrant's Value messages. Proven by plans/collections/lifecycle.yaml.
+    adapter: restGetCollection
+    oas:
+      operationId: get_collection
+    tags: [collections, rest]
+    requires: [collection]
+    inputs:
+      - name: collectionName
+        type: string
+        default: {from: createCollection.collectionName}
+    outputs:
+      - name: status
+        type: string
+      - name: vectorSize
+        type: integer
+      - name: distance
+        type: string
+      - name: project
+        type: string
+        optional: true

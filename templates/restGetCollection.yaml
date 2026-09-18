@@ -1,0 +1,18 @@
+adapter: restGetCollection
+protocol: http
+
+request:
+  method: GET
+  path: /collections/{{collectionName}}
+
+response:
+  # The same collection getCollection reads, over REST: a size is a JSON number, the status and
+  # the distance are lowercase and capitalized as the REST schema spells them, and metadata values
+  # are plain JSON.
+  extract:
+    status: result.status
+    vectorSize: result.config.params.vectors.size
+    distance: result.config.params.vectors.distance
+    project:
+      path: result.config.metadata.project
+      optional: true

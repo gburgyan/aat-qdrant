@@ -1,0 +1,14 @@
+adapter: healthCheck
+protocol: grpc
+
+request:
+  rpc: qdrant.Qdrant/HealthCheck
+  message: "{}"
+
+response:
+  extract:
+    title: title
+    version: version
+    commit:
+      path: commit
+      optional: true

@@ -1,0 +1,23 @@
+# Creating a collection under a name that is taken is refused with ALREADY_EXISTS, and the
+# refusal names the collection. Over REST the same refusal is a 409.
+intent:
+  goal: again
+  description: A second create under the same name is refused with ALREADY_EXISTS
+
+execution:
+  steps:
+    - id: first
+      node: createCollection
+
+    - id: again
+      node: createCollection
+      isGoal: true
+      values:
+        collectionName: {fromInput: first.collectionName}
+      expectFailure:
+        status: [ALREADY_EXISTS]
+        description: the name is taken by the collection the step before created
+      assertions:
+        mechanical:
+          - type: predicate
+            expr: 'code == "ALREADY_EXISTS" && message == "Wrong input: Collection `{{first.collectionName}}` already exists!"'

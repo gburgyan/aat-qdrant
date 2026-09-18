@@ -1,0 +1,40 @@
+# A collection's optimizer settings and metadata change in place. The update names only the note;
+# the project tag set at creation survives it, so metadata is merged rather than replaced.
+intent:
+  goal: after
+  description: An update changes the indexing threshold and adds a note, keeping the project tag
+
+execution:
+  steps:
+    - id: create
+      node: createCollection
+
+    - id: before
+      node: getCollection
+      assertions:
+        mechanical:
+          - type: predicate
+            expr: indexingThreshold == "10000" && project == "aat-qdrant"
+
+    - id: update
+      node: updateCollection
+      dependsOn: [before]
+      values:
+        indexingThreshold: 20000
+        note: raised by collections/update-optimizers
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: updated
+            value: true
+
+    - id: after
+      node: getCollection
+      isGoal: true
+      dependsOn: [update]
+      assertions:
+        mechanical:
+          - type: predicate
+            expr: >-
+              indexingThreshold == "20000" && note == "raised by collections/update-optimizers" &&
+              project == "aat-qdrant"

@@ -1,0 +1,41 @@
+# The Qdrant this project runs against: the open-source image, pinned by tag and
+# digest, listening on localhost only.
+#
+#   scripts/up.sh                        # start it and wait until it is ready
+#   docker compose down                  # stop it; nothing is kept
+#   docker compose --profile cluster up -d qdrant-cluster
+#                                        # also start the one-node cluster (shard keys)
+#
+# There is no volume, so every start is a clean database. The keys below guard a
+# throwaway container on 127.0.0.1 and nothing else; env.yaml reads the same
+# literals. Never reuse them for a Qdrant anyone else can reach.
+name: aat-qdrant
+
+x-qdrant: &qdrant
+  image: qdrant/qdrant:v1.19.1@sha256:12364fe851b9f17356fc88189fc06d1b521262e04659ec7345975b00c9246a10
+  environment: &qdrant-env
+    QDRANT__SERVICE__API_KEY: aat-qdrant-local-key
+    QDRANT__SERVICE__READ_ONLY_API_KEY: aat-qdrant-local-read-only-key
+    QDRANT__SERVICE__JWT_RBAC: "true"
+    QDRANT__TELEMETRY_DISABLED: "true"
+
+services:
+  qdrant:
+    <<: *qdrant
+    ports:
+      - 127.0.0.1:6333:6333 # REST
+      - 127.0.0.1:6334:6334 # gRPC
+
+  # Shard keys need cluster mode, and one node is enough: it elects itself
+  # leader. Standalone, those calls answer UNIMPLEMENTED, which the plans
+  # against the service above prove.
+  qdrant-cluster:
+    <<: *qdrant
+    profiles: [cluster]
+    environment:
+      <<: *qdrant-env
+      QDRANT__CLUSTER__ENABLED: "true"
+    command: ["./entrypoint.sh", "--uri", "http://qdrant-cluster:6335"]
+    ports:
+      - 127.0.0.1:7333:6333 # REST
+      - 127.0.0.1:7334:6334 # gRPC

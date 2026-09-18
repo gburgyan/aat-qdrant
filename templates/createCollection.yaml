@@ -1,0 +1,22 @@
+adapter: createCollection
+protocol: grpc
+
+request:
+  rpc: qdrant.Collections/Create
+  # vectorsConfig is a oneof: `params` for one unnamed vector, `paramsMap` for named ones. The size
+  # is a uint64, which proto3 JSON writes as a string. Metadata is a map of Qdrant's own Value
+  # messages, not plain JSON: a string is {"stringValue": ...}.
+  message: |
+    {
+      "collectionName": "{{collectionName}}",
+      "vectorsConfig": {
+        "params": {"size": "{{vectorSize}}", "distance": "{{distance}}"}
+      },
+      "metadata": {
+        "project": {"stringValue": "aat-qdrant"}
+      }
+    }
+
+response:
+  extract:
+    created: result

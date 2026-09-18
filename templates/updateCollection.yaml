@@ -1,0 +1,17 @@
+adapter: updateCollection
+protocol: grpc
+
+request:
+  rpc: qdrant.Collections/Update
+  message: |
+    {
+      "collectionName": "{{collectionName}}",
+      "optimizersConfig": {"indexingThreshold": "{{indexingThreshold}}"},
+      "metadata": {
+        "note": {"stringValue": "{{note}}"}
+      }
+    }
+
+response:
+  extract:
+    updated: result

@@ -1,0 +1,22 @@
+# No collection this project created is still on the server. Every create names its collection
+# aat-qdrant-*, and every plan deletes what it made, itself or through the graph's cleanup; this
+# guard proves that happened. The name sorts it last in a batch, after every plan that might
+# create one.
+#
+# Run the batch sequentially: a plan still running beside the guard has collections of its own.
+intent:
+  goal: collections
+  description: No collection named aat-qdrant-* is left on the server
+
+execution:
+  steps:
+    - id: collections
+      node: listCollections
+      isGoal: true
+      assertions:
+        mechanical:
+          - type: status
+            expect: OK
+          - type: fieldEquals
+            path: ourCount
+            value: 0

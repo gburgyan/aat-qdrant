@@ -1,0 +1,88 @@
+# A collection from creation to deletion, read back over both protocols on the way.
+#
+# Qdrant lets the client name a collection and answers the creation with only `result: true`, so
+# the name every later step reads is the one createCollection sent (an output echoed from its
+# input). The same collection then reads differently over the two protocols: over gRPC the status
+# is the enum name `Green`, the size a uint64 in a JSON string, and a metadata value a Qdrant
+# Value message; over REST the status is `green`, the size a number, and the metadata plain JSON.
+#
+# The plan deletes the collection itself, so the graph's cleanup has nothing left to do.
+intent:
+  goal: gone
+  description: A collection is created, read over gRPC and REST, listed, deleted, and gone
+
+execution:
+  steps:
+    - id: create
+      node: createCollection
+      description: Four-dimensional cosine vectors, named aat-qdrant-<random>
+      assertions:
+        mechanical:
+          - type: status
+            expect: OK
+          - type: fieldEquals
+            path: created
+            value: true
+
+    - id: exists
+      node: collectionExists
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: exists
+            value: true
+
+    - id: read
+      node: getCollection
+      description: Over gRPC
+      assertions:
+        mechanical:
+          - type: predicate
+            expr: >-
+              status == "Green" && vectorSize == "4" && distance == "Cosine" &&
+              project == "aat-qdrant" && pointsCount == "0" && indexingThreshold == "10000"
+          # A note is set only by updateCollection.
+          - type: fieldAbsent
+            path: note
+
+    - id: readRest
+      node: restGetCollection
+      description: The same collection over REST
+      assertions:
+        mechanical:
+          - type: status
+            expect: 200
+          - type: predicate
+            expr: status == "green" && vectorSize == 4 && distance == "Cosine" && project == "aat-qdrant"
+
+    - id: listed
+      node: listCollections
+      dependsOn: [readRest]
+      assertions:
+        mechanical:
+          - type: predicate
+            expr: ourCount >= 1 && count >= ourCount
+
+    - id: delete
+      node: deleteCollection
+      dependsOn: [listed]
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: deleted
+            value: true
+
+    - id: gone
+      node: collectionExists
+      isGoal: true
+      dependsOn: [delete]
+      description: false is an answer, present in the response, not a missing field
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: exists
+            value: false
+          - type: fieldEquals
+            path: result.exists
+            value: false
+            raw: true

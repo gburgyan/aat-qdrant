@@ -1,0 +1,21 @@
+adapter: listCollections
+protocol: grpc
+
+request:
+  rpc: qdrant.Collections/List
+  message: "{}"
+
+response:
+  extract:
+    names: collections.#.name
+    count: "collections.#"
+  # This project's collections are the ones named aat-qdrant-*.
+  transform: |
+    local names = json_path("collections.#.name") or {}
+    local ours = {}
+    for _, name in ipairs(names) do
+      if string.sub(name, 1, 11) == "aat-qdrant-" then table.insert(ours, name) end
+    end
+    outputs.ours = ours
+    outputs.ourCount = #ours
+    return outputs

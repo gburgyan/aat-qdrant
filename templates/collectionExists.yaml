@@ -1,0 +1,11 @@
+adapter: collectionExists
+protocol: grpc
+
+request:
+  rpc: qdrant.Collections/CollectionExists
+  message: |
+    {"collectionName": "{{collectionName}}"}
+
+response:
+  extract:
+    exists: result.exists

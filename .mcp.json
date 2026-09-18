@@ -1,0 +1,6 @@
+{
+  "mcpServers": {
+    "qdrant-api": {"command": "aat", "args": ["mcp", "serve", "--persona", "api"]},
+    "qdrant-test": {"command": "aat", "args": ["mcp", "serve", "--persona", "test"]}
+  }
+}

@@ -1,0 +1,59 @@
+# Qdrant serves two health checks, and neither needs a key: its own, which reports the version
+# this project pins, and the standard gRPC health service.
+#
+# The standard service is lenient. The gRPC health protocol says a server should answer NOT_FOUND
+# for a service it doesn't know; Qdrant answers SERVING whatever name it is asked about, so a
+# health probe that names a service learns nothing about that service.
+intent:
+  goal: unknownService
+  description: Both health checks answer, and the standard one says SERVING for any service name
+
+execution:
+  steps:
+    - id: health
+      node: healthCheck
+      description: Qdrant's own check, which names the running version
+      assertions:
+        mechanical:
+          - type: status
+            expect: OK
+          - type: predicate
+            expr: 'title == "qdrant - vector search engine" && version == "1.19.1"'
+          - type: fieldExists
+            path: commit
+
+    - id: server
+      node: grpcHealthCheck
+      description: The standard check, about the server as a whole
+      assertions:
+        mechanical:
+          - type: status
+            expect: OK
+          - type: fieldEquals
+            path: status
+            value: SERVING
+
+    - id: pointsService
+      node: grpcHealthCheck
+      description: The standard check, about one of Qdrant's services
+      values:
+        service: qdrant.Points
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: status
+            value: SERVING
+
+    - id: unknownService
+      node: grpcHealthCheck
+      isGoal: true
+      description: A service Qdrant doesn't have, which it also calls SERVING
+      values:
+        service: aat.NoSuchService
+      assertions:
+        mechanical:
+          - type: status
+            expect: OK
+          - type: fieldEquals
+            path: status
+            value: SERVING

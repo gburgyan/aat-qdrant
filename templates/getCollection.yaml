@@ -1,0 +1,26 @@
+adapter: getCollection
+protocol: grpc
+
+request:
+  rpc: qdrant.Collections/Get
+  message: |
+    {"collectionName": "{{collectionName}}"}
+
+response:
+  # uint64 fields (pointsCount, segmentsCount, size, indexingThreshold) arrive as strings. Metadata
+  # values are Qdrant Value messages, so a string sits one level down, under stringValue.
+  extract:
+    status: result.status
+    pointsCount:
+      path: result.pointsCount
+      optional: true
+    segmentsCount: result.segmentsCount
+    vectorSize: result.config.params.vectorsConfig.params.size
+    distance: result.config.params.vectorsConfig.params.distance
+    indexingThreshold: result.config.optimizerConfig.indexingThreshold
+    project:
+      path: result.config.metadata.project.stringValue
+      optional: true
+    note:
+      path: result.config.metadata.note.stringValue
+      optional: true

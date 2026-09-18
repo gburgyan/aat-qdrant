@@ -1,0 +1,11 @@
+adapter: deleteCollection
+protocol: grpc
+
+request:
+  rpc: qdrant.Collections/Delete
+  message: |
+    {"collectionName": "{{collectionName}}"}
+
+response:
+  extract:
+    deleted: result

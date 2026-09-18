@@ -1,0 +1,61 @@
+# Asking about a collection that doesn't exist. Reading it is NOT_FOUND (404 over REST); asking
+# whether it exists is not an error at all but `exists: false`; and deleting it succeeds with
+# `result: false` rather than failing.
+intent:
+  goal: deleteMissing
+  description: A missing collection is NOT_FOUND to read, false to ask about, and false to delete
+
+execution:
+  steps:
+    - id: read
+      node: getCollection
+      values:
+        collectionName: "aat-qdrant-missing-{{random 8}}"
+      expectFailure:
+        status: [NOT_FOUND]
+        description: no collection has this name
+      assertions:
+        mechanical:
+          - type: predicate
+            expr: >-
+              code == "NOT_FOUND" &&
+              message == "Not found: Collection `{{collectionName}}` doesn't exist!"
+
+    - id: readRest
+      node: restGetCollection
+      values:
+        collectionName: {fromInput: read.collectionName}
+      expectFailure:
+        status: [404]
+        description: the same collection over REST
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: status.error
+            value: "Not found: Collection `{{collectionName}}` doesn't exist!"
+            raw: true
+
+    - id: exists
+      node: collectionExists
+      values:
+        collectionName: {fromInput: read.collectionName}
+      assertions:
+        mechanical:
+          - type: status
+            expect: OK
+          - type: fieldEquals
+            path: exists
+            value: false
+
+    - id: deleteMissing
+      node: deleteCollection
+      isGoal: true
+      values:
+        collectionName: {fromInput: read.collectionName}
+      assertions:
+        mechanical:
+          - type: status
+            expect: OK
+          - type: fieldEquals
+            path: deleted
+            value: false

@@ -1,0 +1,13 @@
+adapter: grpcHealthCheck
+protocol: grpc
+
+request:
+  rpc: grpc.health.v1.Health/Check
+  message: |
+    {
+      {{?service}}"service": "{{service}}"{{/service}}
+    }
+
+response:
+  extract:
+    status: status
