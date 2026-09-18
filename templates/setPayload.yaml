@@ -1,0 +1,17 @@
+adapter: setPayload
+protocol: grpc
+
+request:
+  rpc: qdrant.Points/SetPayload
+  message: |
+    {
+      "collectionName": "{{collectionName}}",
+      "wait": true,
+      "payload": {{payload}},
+      "pointsSelector": {"points": {"ids": {{ids}}}}{{?key}},
+      "key": "{{key}}"{{/key}}
+    }
+
+response:
+  extract:
+    status: result.status

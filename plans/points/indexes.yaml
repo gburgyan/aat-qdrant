@@ -1,0 +1,62 @@
+# Payload indexes, created and dropped. A collection lists its indexed fields in payloadSchema.
+# The keyword field type is the enum's zero value, FieldTypeKeyword, and has to be sent anyway:
+# the field is optional, so leaving it out would not mean keyword.
+intent:
+  goal: dropped
+  description: Two payload fields are indexed, one index is dropped, and the other goes with cleanup
+
+execution:
+  steps:
+    - id: create
+      node: createCollection
+
+    - id: upsert
+      node: upsertPoints
+
+    - id: cityIndex
+      node: createFieldIndex
+      dependsOn: [upsert]
+      values:
+        fieldName: city
+        fieldType: FieldTypeKeyword
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: status
+            value: Completed
+
+    - id: populationIndex
+      node: createFieldIndex
+      dependsOn: [cityIndex]
+      values:
+        fieldName: population
+        fieldType: FieldTypeInteger
+
+    - id: indexed
+      node: getCollection
+      dependsOn: [populationIndex]
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: payloadSchema
+            value: [city, population]
+          - type: fieldEquals
+            path: result.payloadSchema.population.dataType
+            value: Integer
+            raw: true
+
+    - id: dropPopulation
+      node: deleteFieldIndex
+      dependsOn: [indexed]
+      values:
+        fieldName: {from: populationIndex.fieldName}
+
+    - id: dropped
+      node: getCollection
+      isGoal: true
+      dependsOn: [dropPopulation]
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: payloadSchema
+            value: [city]

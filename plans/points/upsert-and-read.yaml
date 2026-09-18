@@ -1,0 +1,130 @@
+# Qdrant's quickstart dataset in, and back out over both protocols.
+#
+# A point id is a oneof: a uint64, written {"num": "1"} because proto3 JSON quotes 64-bit
+# integers, or a UUID. Zero is a valid id, and so is any UUID. Over REST the same ids are a bare
+# number and a bare string, and the payload is plain JSON rather than Qdrant Value messages.
+#
+# The collection uses Dot distance so the vectors read back exactly as written; cosine
+# collections normalize them on the way in (points/cosine-normalizes).
+intent:
+  goal: restUuid
+  description: Points with numeric, zero, and UUID ids are written, read by id, and read over REST
+
+execution:
+  steps:
+    - id: create
+      node: createCollection
+      values:
+        distance: Dot
+
+    - id: upsert
+      node: upsertPoints
+      description: Qdrant's quickstart dataset, six cities
+      assertions:
+        mechanical:
+          - type: status
+            expect: OK
+          - type: fieldEquals
+            path: status
+            value: Completed
+
+    - id: counted
+      node: getCollection
+      dependsOn: [upsert]
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: pointsCount
+            value: "6"
+
+    - id: read
+      node: getPoints
+      dependsOn: [upsert]
+      values:
+        ids: [{num: "1"}, {num: "4"}, {num: "99"}]
+        withVectors: true
+      description: Two ids that exist and one that doesn't, which is simply left out
+      assertions:
+        mechanical:
+          - type: predicate
+            expr: count == 2
+          - type: fieldEquals
+            path: cities
+            value: [Berlin, New York]
+          - type: fieldEquals
+            path: firstVector
+            value: [0.05, 0.61, 0.76, 0.74]
+          - type: fieldEquals
+            path: result.0.payload.population.integerValue
+            value: "3645000"
+            raw: true
+
+    - id: restRead
+      node: restGetPoint
+      dependsOn: [upsert]
+      values:
+        id: "1"
+      assertions:
+        mechanical:
+          - type: status
+            expect: 200
+          - type: predicate
+            expr: id == 1 && city == "Berlin"
+          - type: fieldEquals
+            path: payload
+            value: {city: Berlin, country: Germany, population: 3645000}
+          - type: fieldEquals
+            path: vector
+            value: [0.05, 0.61, 0.76, 0.74]
+
+    - id: odd
+      node: upsertPoints
+      dependsOn: [read, restRead, counted]
+      description: Id zero, and a UUID id
+      values:
+        points:
+          - {id: {num: "0"}, vectors: {vector: {dense: {data: [1, 0, 0, 0]}}}, payload: {city: {stringValue: Zero}}}
+          - {id: {uuid: 5c56c793-69f3-4fbf-87e6-c4bf54c28c26}, vectors: {vector: {dense: {data: [0, 1, 0, 0]}}}, payload: {city: {stringValue: Uuid}}}
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: status
+            value: Completed
+
+    - id: readOdd
+      node: getPoints
+      dependsOn: [odd]
+      values:
+        ids: [{num: "0"}, {uuid: 5c56c793-69f3-4fbf-87e6-c4bf54c28c26}]
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: ids
+            value: [{num: "0"}, {uuid: 5c56c793-69f3-4fbf-87e6-c4bf54c28c26}]
+          - type: fieldEquals
+            path: cities
+            value: [Zero, Uuid]
+
+    - id: restZero
+      node: restGetPoint
+      dependsOn: [odd]
+      values:
+        id: "0"
+      assertions:
+        mechanical:
+          - type: predicate
+            expr: id == 0 && city == "Zero"
+
+    - id: restUuid
+      node: restGetPoint
+      isGoal: true
+      dependsOn: [odd]
+      values:
+        id: 5c56c793-69f3-4fbf-87e6-c4bf54c28c26
+      description: A UUID id over REST is a bare string, which the numeric id output can't hold
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: result.id
+            value: 5c56c793-69f3-4fbf-87e6-c4bf54c28c26
+            raw: true

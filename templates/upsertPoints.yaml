@@ -1,0 +1,20 @@
+adapter: upsertPoints
+protocol: grpc
+
+request:
+  rpc: qdrant.Points/Upsert
+  # The points go in whole: each is a qdrant.PointStruct written in proto3 JSON by the plan or the
+  # graph default, so what a plan says is what goes on the wire.
+  message: |
+    {
+      "collectionName": "{{collectionName}}",
+      "wait": {{wait}},
+      "points": {{points}}
+    }
+
+response:
+  extract:
+    status: result.status
+    operationId:
+      path: result.operationId
+      optional: true

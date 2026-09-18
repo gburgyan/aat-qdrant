@@ -1,0 +1,16 @@
+adapter: createFieldIndex
+protocol: grpc
+
+request:
+  rpc: qdrant.Points/CreateFieldIndex
+  message: |
+    {
+      "collectionName": "{{collectionName}}",
+      "wait": true,
+      "fieldName": "{{fieldName}}",
+      "fieldType": "{{fieldType}}"
+    }
+
+response:
+  extract:
+    status: result.status

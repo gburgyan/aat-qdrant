@@ -1,0 +1,17 @@
+adapter: createVectorName
+protocol: grpc
+
+request:
+  rpc: qdrant.Points/CreateVectorName
+  # vector_config is a oneof: denseConfig here, sparseConfig for a sparse vector.
+  message: |
+    {
+      "collectionName": "{{collectionName}}",
+      "wait": true,
+      "vectorName": "{{vectorName}}",
+      "denseConfig": {"size": "{{size}}", "distance": "{{distance}}"}
+    }
+
+response:
+  extract:
+    status: result.status

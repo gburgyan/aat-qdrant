@@ -1,0 +1,28 @@
+adapter: getPoints
+protocol: grpc
+
+request:
+  rpc: qdrant.Points/Get
+  message: |
+    {
+      "collectionName": "{{collectionName}}",
+      "ids": {{ids}},
+      "withPayload": {"enable": true},
+      "withVectors": {"enable": {{withVectors}}}
+    }
+
+response:
+  # A point's vectors are a oneof: `vector` for the unnamed one, `vectors` for named ones.
+  extract:
+    count: "result.#"
+    ids: result.#.id
+    cities: result.#.payload.city.stringValue
+    firstPayload:
+      path: result.0.payload
+      optional: true
+    firstVector:
+      path: result.0.vectors.vector.dense.data
+      optional: true
+    firstNamedVectors:
+      path: result.0.vectors.vectors.vectors
+      optional: true

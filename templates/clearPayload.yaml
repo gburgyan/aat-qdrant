@@ -1,0 +1,15 @@
+adapter: clearPayload
+protocol: grpc
+
+request:
+  rpc: qdrant.Points/ClearPayload
+  message: |
+    {
+      "collectionName": "{{collectionName}}",
+      "wait": true,
+      "points": {"points": {"ids": {{ids}}}}
+    }
+
+response:
+  extract:
+    status: result.status

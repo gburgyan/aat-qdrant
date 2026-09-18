@@ -1,0 +1,16 @@
+adapter: overwritePayload
+protocol: grpc
+
+request:
+  rpc: qdrant.Points/OverwritePayload
+  message: |
+    {
+      "collectionName": "{{collectionName}}",
+      "wait": true,
+      "payload": {{payload}},
+      "pointsSelector": {"points": {"ids": {{ids}}}}
+    }
+
+response:
+  extract:
+    status: result.status

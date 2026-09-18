@@ -1,0 +1,81 @@
+# Deleting points by id and by filter, counted after each. The selector is a oneof: a plan gives
+# ids or a filter. A filter works on a payload field that has no index; it is just slower.
+intent:
+  goal: afterFilter
+  description: Points are counted, deleted by id and by filter, and counted again
+
+execution:
+  steps:
+    - id: create
+      node: createCollection
+
+    - id: upsert
+      node: upsertPoints
+
+    - id: all
+      node: countPoints
+      dependsOn: [upsert]
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: count
+            value: "6"
+
+    - id: germany
+      node: countPoints
+      dependsOn: [upsert]
+      values:
+        filter: {default: {must: [{field: {key: country, match: {keyword: Germany}}}]}}
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: count
+            value: "1"
+
+    - id: large
+      node: countPoints
+      dependsOn: [upsert]
+      description: A range condition on an integer payload value
+      values:
+        filter: {default: {must: [{field: {key: population, range: {gte: 10000000}}}]}}
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: count
+            value: "3"
+
+    - id: byId
+      node: deletePoints
+      dependsOn: [all, germany, large]
+      values:
+        ids: [{num: "2"}]
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: status
+            value: Completed
+
+    - id: afterId
+      node: countPoints
+      dependsOn: [byId]
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: count
+            value: "5"
+
+    - id: byFilter
+      node: deletePoints
+      dependsOn: [afterId]
+      values:
+        filter: {default: {must: [{field: {key: country, match: {keywords: {strings: [USA, India]}}}}]}}
+
+    - id: afterFilter
+      node: countPoints
+      isGoal: true
+      dependsOn: [byFilter]
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: count
+            value: "3"

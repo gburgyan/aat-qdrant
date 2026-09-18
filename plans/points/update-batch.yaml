@@ -1,0 +1,43 @@
+# Several point operations in one call, applied in order, each with its own result. An operation
+# is a oneof: which key it has says what it does.
+intent:
+  goal: after
+  description: An upsert, a payload change, and a delete go in one batch with a result each
+
+execution:
+  steps:
+    - id: create
+      node: createCollection
+
+    - id: batch
+      node: updateBatch
+      values:
+        operations:
+          - upsert:
+              points:
+                - {id: {num: "1"}, vectors: {vector: {dense: {data: [1, 0, 0, 0]}}}, payload: {city: {stringValue: Lisbon}}}
+                - {id: {num: "2"}, vectors: {vector: {dense: {data: [0, 1, 0, 0]}}}, payload: {city: {stringValue: Porto}}}
+          - setPayload:
+              payload: {country: {stringValue: Portugal}}
+              pointsSelector: {points: {ids: [{num: "1"}, {num: "2"}]}}
+          - deletePoints:
+              points: {points: {ids: [{num: "2"}]}}
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: statuses
+            value: [Completed, Completed, Completed]
+
+    - id: after
+      node: getPoints
+      isGoal: true
+      dependsOn: [batch]
+      values:
+        ids: [{num: "1"}, {num: "2"}]
+      assertions:
+        mechanical:
+          - type: predicate
+            expr: count == 1
+          - type: fieldEquals
+            path: firstPayload
+            value: {city: {stringValue: Lisbon}, country: {stringValue: Portugal}}

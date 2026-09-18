@@ -1,0 +1,16 @@
+adapter: deletePayload
+protocol: grpc
+
+request:
+  rpc: qdrant.Points/DeletePayload
+  message: |
+    {
+      "collectionName": "{{collectionName}}",
+      "wait": true,
+      "keys": {{keys}},
+      "pointsSelector": {"points": {"ids": {{ids}}}}
+    }
+
+response:
+  extract:
+    status: result.status

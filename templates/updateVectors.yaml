@@ -1,0 +1,15 @@
+adapter: updateVectors
+protocol: grpc
+
+request:
+  rpc: qdrant.Points/UpdateVectors
+  message: |
+    {
+      "collectionName": "{{collectionName}}",
+      "wait": true,
+      "points": {{points}}
+    }
+
+response:
+  extract:
+    status: result.status

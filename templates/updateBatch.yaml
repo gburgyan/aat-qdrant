@@ -1,0 +1,16 @@
+adapter: updateBatch
+protocol: grpc
+
+request:
+  rpc: qdrant.Points/UpdateBatch
+  message: |
+    {
+      "collectionName": "{{collectionName}}",
+      "wait": true,
+      "operations": {{operations}}
+    }
+
+response:
+  extract:
+    statuses: result.#.status
+    count: "result.#"

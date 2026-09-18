@@ -1,0 +1,57 @@
+# A cosine collection stores vectors normalized to unit length, so a vector reads back different
+# from what was written: [3, 4, 0, 0] comes back as [0.6, 0.8, 0, 0]. A dot-product collection
+# stores it as written.
+intent:
+  goal: dot
+  description: Cosine collections normalize stored vectors; dot-product collections don't
+
+execution:
+  steps:
+    - id: cosine
+      node: createCollection
+      values:
+        distance: Cosine
+
+    - id: dotCollection
+      node: createCollection
+      values:
+        distance: Dot
+
+    - id: upsertCosine
+      node: upsertPoints
+      values:
+        collectionName: {from: cosine.collectionName}
+        points:
+          - {id: {num: "1"}, vectors: {vector: {dense: {data: [3, 4, 0, 0]}}}}
+
+    - id: upsertDot
+      node: upsertPoints
+      values:
+        collectionName: {from: dotCollection.collectionName}
+        points:
+          - {id: {num: "1"}, vectors: {vector: {dense: {data: [3, 4, 0, 0]}}}}
+
+    - id: readCosine
+      node: getPoints
+      dependsOn: [upsertCosine]
+      values:
+        collectionName: {from: cosine.collectionName}
+        withVectors: true
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: firstVector
+            value: [0.6, 0.8, 0, 0]
+
+    - id: dot
+      node: getPoints
+      isGoal: true
+      dependsOn: [upsertDot]
+      values:
+        collectionName: {from: dotCollection.collectionName}
+        withVectors: true
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: firstVector
+            value: [3, 4, 0, 0]

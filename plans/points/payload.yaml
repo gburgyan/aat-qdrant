@@ -1,0 +1,110 @@
+# The four ways to change a payload, read back after each.
+#
+# SetPayload merges keys in; with `key`, it nests them under that key as an object, which comes
+# back as a structValue. DeletePayload removes keys, OverwritePayload replaces the whole payload,
+# and ClearPayload empties it: an empty payload is an empty map, present in the response.
+intent:
+  goal: cleared
+  description: A payload is merged, nested, trimmed, replaced, and cleared
+
+execution:
+  steps:
+    - id: create
+      node: createCollection
+
+    - id: upsert
+      node: upsertPoints
+
+    - id: set
+      node: setPayload
+      dependsOn: [upsert]
+      values:
+        ids: [{num: "1"}]
+        payload:
+          default:
+            tags: {listValue: {values: [{stringValue: capital}, {stringValue: river}]}}
+            visited: {boolValue: true}
+
+    - id: nested
+      node: setPayload
+      dependsOn: [set]
+      values:
+        ids: [{num: "1"}]
+        payload:
+          default:
+            founded: {integerValue: "1237"}
+        key: meta
+
+    - id: merged
+      node: getPoints
+      dependsOn: [nested]
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: result.0.payload.city.stringValue
+            value: Berlin
+            raw: true
+          - type: fieldEquals
+            path: result.0.payload.tags.listValue.values.1.stringValue
+            value: river
+            raw: true
+          - type: fieldEquals
+            path: result.0.payload.meta.structValue.fields.founded.integerValue
+            value: "1237"
+            raw: true
+
+    - id: trim
+      node: deletePayload
+      dependsOn: [merged]
+      values:
+        ids: [{num: "1"}]
+        keys: [population, visited]
+
+    - id: trimmed
+      node: getPoints
+      dependsOn: [trim]
+      assertions:
+        mechanical:
+          - type: fieldAbsent
+            path: result.0.payload.population
+            raw: true
+          - type: fieldAbsent
+            path: result.0.payload.visited
+            raw: true
+          - type: fieldExists
+            path: result.0.payload.country
+            raw: true
+
+    - id: overwrite
+      node: overwritePayload
+      dependsOn: [trimmed]
+      values:
+        ids: [{num: "1"}]
+        payload:
+          default:
+            only: {stringValue: this}
+
+    - id: replaced
+      node: getPoints
+      dependsOn: [overwrite]
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: firstPayload
+            value: {only: {stringValue: this}}
+
+    - id: clear
+      node: clearPayload
+      dependsOn: [replaced]
+      values:
+        ids: [{num: "1"}]
+
+    - id: cleared
+      node: getPoints
+      isGoal: true
+      dependsOn: [clear]
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: firstPayload
+            value: {}

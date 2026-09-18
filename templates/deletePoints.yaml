@@ -1,0 +1,19 @@
+adapter: deletePoints
+protocol: grpc
+
+request:
+  rpc: qdrant.Points/Delete
+  # The selector is a oneof: ids or a filter. A plan sets one; setting both is a request the codec
+  # refuses before it is sent.
+  message: |
+    {
+      "collectionName": "{{collectionName}}",
+      "wait": true,
+      "points": {
+        {{?ids}}"points": {"ids": {{ids}}}{{/ids}}{{?filter}}"filter": {{filter}}{{/filter}}
+      }
+    }
+
+response:
+  extract:
+    status: result.status

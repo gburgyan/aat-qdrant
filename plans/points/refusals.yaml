@@ -1,0 +1,66 @@
+# Points Qdrant refuses, each INVALID_ARGUMENT with a message that says why, and a write to a
+# collection that doesn't exist, which is NOT_FOUND.
+intent:
+  goal: noCollection
+  description: A wrong dimension, a malformed UUID, and a missing id are refused; so is a missing collection
+
+execution:
+  steps:
+    - id: create
+      node: createCollection
+
+    - id: wrongDimension
+      node: upsertPoints
+      values:
+        points:
+          - {id: {num: "1"}, vectors: {vector: {dense: {data: [1, 0]}}}}
+      expectFailure:
+        status: [INVALID_ARGUMENT]
+        description: the collection's vectors have four dimensions
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: message
+            value: "Wrong input: Vector dimension error: expected dim: 4, got 2"
+
+    - id: badUuid
+      node: upsertPoints
+      values:
+        points:
+          - {id: {uuid: not-a-uuid}, vectors: {vector: {dense: {data: [1, 0, 0, 0]}}}}
+      expectFailure:
+        status: [INVALID_ARGUMENT]
+        description: a uuid id must parse as a UUID
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: message
+            value: "Unable to parse UUID: not-a-uuid"
+
+    - id: noId
+      node: upsertPoints
+      values:
+        points:
+          - {vectors: {vector: {dense: {data: [1, 0, 0, 0]}}}}
+      expectFailure:
+        status: [INVALID_ARGUMENT]
+        description: the id oneof has to be set
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: message
+            value: Empty ID is not allowed
+
+    - id: noCollection
+      node: upsertPoints
+      isGoal: true
+      values:
+        collectionName: "aat-qdrant-missing-{{random 8}}"
+      expectFailure:
+        status: [NOT_FOUND]
+        description: no collection has this name
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: message
+            value: "Not found: Collection `{{collectionName}}` doesn't exist!"

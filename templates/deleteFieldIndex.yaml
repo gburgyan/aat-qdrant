@@ -1,0 +1,15 @@
+adapter: deleteFieldIndex
+protocol: grpc
+
+request:
+  rpc: qdrant.Points/DeleteFieldIndex
+  message: |
+    {
+      "collectionName": "{{collectionName}}",
+      "wait": true,
+      "fieldName": "{{fieldName}}"
+    }
+
+response:
+  extract:
+    status: result.status

@@ -1,0 +1,113 @@
+# A point's vectors, changed without touching its payload, and a second, named vector added to a
+# collection that had one unnamed vector.
+#
+# Adding the named vector turns the collection's config from `params` into a map of named vectors
+# in which the unnamed one is keyed "", and points read back with their vectors in a map under the
+# same keys. A GJSON path reaches the "" key as an empty segment: vectors..dense.data.
+#
+# Each vector in the map also carries `data: []`. It is the deprecated field the dense oneof
+# replaced, and proto3 JSON writes an empty repeated field as an empty list rather than leaving it
+# out, so it is there even though Qdrant never sets it.
+intent:
+  goal: unnamedGone
+  description: Vectors are replaced, a named vector is added and set, and vectors are deleted
+
+execution:
+  steps:
+    - id: create
+      node: createCollection
+      values:
+        distance: Dot
+
+    - id: upsert
+      node: upsertPoints
+
+    - id: replace
+      node: updateVectors
+      dependsOn: [upsert]
+      values:
+        points:
+          - {id: {num: "1"}, vectors: {vector: {dense: {data: [1, 2, 3, 4]}}}}
+
+    - id: replaced
+      node: getPoints
+      dependsOn: [replace]
+      values:
+        withVectors: true
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: firstVector
+            value: [1, 2, 3, 4]
+          - type: fieldEquals
+            path: cities
+            value: [Berlin]
+
+    - id: addName
+      node: createVectorName
+      dependsOn: [replaced]
+
+    - id: config
+      node: getCollection
+      dependsOn: [addName]
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: vectorNames
+            value: ["", extra]
+          - type: fieldAbsent
+            path: vectorSize
+          - type: fieldEquals
+            path: result.config.params.vectorsConfig.paramsMap.map.extra.distance
+            value: Euclid
+            raw: true
+          - type: fieldEquals
+            path: result.config.params.vectorsConfig.paramsMap.map..size
+            value: "4"
+            raw: true
+
+    - id: setNamed
+      node: updateVectors
+      dependsOn: [config]
+      values:
+        points:
+          - {id: {num: "1"}, vectors: {vectors: {vectors: {extra: {dense: {data: [3, 4]}}}}}}
+
+    - id: both
+      node: getPoints
+      dependsOn: [setNamed]
+      values:
+        withVectors: true
+      assertions:
+        mechanical:
+          - type: fieldAbsent
+            path: firstVector
+          - type: fieldEquals
+            path: firstNamedVectors
+            value: {"": {data: [], dense: {data: [1, 2, 3, 4]}}, extra: {data: [], dense: {data: [3, 4]}}}
+          - type: fieldEquals
+            path: result.0.vectors.vectors.vectors..dense.data
+            value: [1, 2, 3, 4]
+            raw: true
+
+    - id: dropUnnamed
+      node: deleteVectors
+      dependsOn: [both]
+      values:
+        ids: [{num: "1"}]
+        vectorNames: [""]
+
+    - id: unnamedGone
+      node: getPoints
+      isGoal: true
+      dependsOn: [dropUnnamed]
+      values:
+        withVectors: true
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: firstNamedVectors
+            value: {extra: {data: [], dense: {data: [3, 4]}}}
+          - type: fieldEquals
+            path: cities
+            value: [Berlin]

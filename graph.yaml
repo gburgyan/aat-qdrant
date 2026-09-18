@@ -106,10 +106,21 @@ nodes:
         type: integer
       - name: vectorSize
         type: integer
+        optional: true
+        description: The unnamed vector's size, when the collection has only that one
       - name: distance
         type: string
+        optional: true
+      - name: vectorNames
+        type: string[]
+        description: >-
+          The names in a collection's vector map, sorted. A collection with one unnamed vector
+          has none; once a named vector is added, the unnamed one is listed as "".
       - name: indexingThreshold
         type: integer
+      - name: payloadSchema
+        type: string[]
+        description: The payload fields that have an index, sorted
       - name: project
         type: string
         optional: true
@@ -191,6 +202,400 @@ nodes:
       - name: deleted
         type: boolean
 
+  # --- Points ----------------------------------------------------------------
+
+  upsertPoints:
+    description: >-
+      Insert or replace points. Each is a qdrant.PointStruct in proto3 JSON: an id that is a
+      oneof of a uint64 (`{"num": "1"}`) or a UUID (`{"uuid": "..."}`), vectors, and a payload
+      of Qdrant Value messages. The default is Qdrant's own quickstart dataset of six cities. With
+      `wait` the reply comes after the write is applied (Completed); without it, as soon as it is
+      accepted (Acknowledged). Proven by plans/points/upsert-and-read.yaml.
+    adapter: upsertPoints
+    proto: qdrant.Points/Upsert
+    tags: [points]
+    requires: [collection]
+    inputs:
+      - name: collectionName
+        type: string
+        default: {from: createCollection.collectionName}
+      - name: points
+        type: PointStruct[]
+        default:
+          value:
+            - {id: {num: "1"}, vectors: {vector: {dense: {data: [0.05, 0.61, 0.76, 0.74]}}}, payload: {city: {stringValue: Berlin}, country: {stringValue: Germany}, population: {integerValue: "3645000"}}}
+            - {id: {num: "2"}, vectors: {vector: {dense: {data: [0.19, 0.81, 0.75, 0.11]}}}, payload: {city: {stringValue: London}, country: {stringValue: UK}, population: {integerValue: "8982000"}}}
+            - {id: {num: "3"}, vectors: {vector: {dense: {data: [0.36, 0.55, 0.47, 0.94]}}}, payload: {city: {stringValue: Moscow}, country: {stringValue: Russia}, population: {integerValue: "12640000"}}}
+            - {id: {num: "4"}, vectors: {vector: {dense: {data: [0.18, 0.01, 0.85, 0.80]}}}, payload: {city: {stringValue: New York}, country: {stringValue: USA}, population: {integerValue: "8336000"}}}
+            - {id: {num: "5"}, vectors: {vector: {dense: {data: [0.24, 0.18, 0.22, 0.44]}}}, payload: {city: {stringValue: Beijing}, country: {stringValue: China}, population: {integerValue: "21540000"}}}
+            - {id: {num: "6"}, vectors: {vector: {dense: {data: [0.35, 0.08, 0.11, 0.44]}}}, payload: {city: {stringValue: Mumbai}, country: {stringValue: India}, population: {integerValue: "12480000"}}}
+      - name: wait
+        type: boolean
+        default: {value: true}
+    outputs:
+      - name: status
+        type: string
+        description: Completed, or Acknowledged when the write was not waited for
+      - name: operationId
+        type: integer
+        optional: true
+    satisfies: [points]
+
+  getPoints:
+    description: >-
+      Read points by id. An id with no point is not an error: it is left out of the result.
+      Proven by plans/points/upsert-and-read.yaml.
+    adapter: getPoints
+    proto: qdrant.Points/Get
+    tags: [points]
+    requires: [points]
+    inputs:
+      - name: collectionName
+        type: string
+        default: {from: createCollection.collectionName}
+      - name: ids
+        type: PointId[]
+        default: {value: [{num: "1"}]}
+      - name: withVectors
+        type: boolean
+        default: {value: false}
+    outputs:
+      - name: count
+        type: integer
+      - name: ids
+        type: PointId[]
+      - name: cities
+        type: string[]
+      - name: firstPayload
+        type: Payload
+        optional: true
+      - name: firstVector
+        type: float[]
+        optional: true
+        description: The first point's unnamed dense vector, when it has one and withVectors is set
+      - name: firstNamedVectors
+        type: NamedVectors
+        optional: true
+        description: The first point's named vectors, when it has them and withVectors is set
+
+  deletePoints:
+    description: >-
+      Delete points, chosen either by id or by a filter: the request's selector is a oneof.
+      Proven by plans/points/delete-and-count.yaml.
+    adapter: deletePoints
+    proto: qdrant.Points/Delete
+    tags: [points]
+    requires: [points]
+    inputs:
+      - name: collectionName
+        type: string
+        default: {from: createCollection.collectionName}
+      - name: ids
+        type: PointId[]
+        optional: true
+      - name: filter
+        type: Filter
+        optional: true
+    outputs:
+      - name: status
+        type: string
+
+  countPoints:
+    description: >-
+      Count points, all of them or those a filter matches. The count is a uint64, so it arrives
+      as a string. Proven by plans/points/delete-and-count.yaml.
+    adapter: countPoints
+    proto: qdrant.Points/Count
+    tags: [points]
+    requires: [collection]
+    inputs:
+      - name: collectionName
+        type: string
+        default: {from: createCollection.collectionName}
+      - name: filter
+        type: Filter
+        optional: true
+    outputs:
+      - name: count
+        type: integer
+
+  scrollPoints:
+    description: >-
+      Page through points in id order. The cursor, nextPageOffset, is a PointId: a oneof, so it
+      comes back as {"num": ...} or {"uuid": ...}, and is absent on the last page. AAT pages with
+      string cursors, so the node splits it into nextNum and nextUuid, one of which is set, and
+      sends back whichever came. Proven by plans/points/scroll-pages.yaml.
+    adapter: scrollPoints
+    proto: qdrant.Points/Scroll
+    tags: [points]
+    requires: [points]
+    inputs:
+      - name: collectionName
+        type: string
+        default: {from: createCollection.collectionName}
+      - name: limit
+        type: integer
+        default: {value: 2}
+      - name: offsetNum
+        type: string
+        optional: true
+        description: Start the page at this numeric id; with neither offset, it starts at the lowest
+      - name: offsetUuid
+        type: string
+        optional: true
+        description: Start the page at this UUID id
+      - name: filter
+        type: Filter
+        optional: true
+    outputs:
+      - name: ids
+        type: PointId[]
+      - name: cities
+        type: string[]
+      - name: count
+        type: integer
+      - name: nextPageOffset
+        type: PointId
+        optional: true
+      - name: nextNum
+        type: string
+        description: The cursor's numeric id, or "" when it is a UUID or there is no next page
+      - name: nextUuid
+        type: string
+        description: The cursor's UUID, or "" when it is numeric or there is no next page
+
+  updateVectors:
+    description: >-
+      Replace the vectors of existing points, leaving their payloads alone. Proven by
+      plans/points/vectors.yaml.
+    adapter: updateVectors
+    proto: qdrant.Points/UpdateVectors
+    tags: [points, vectors]
+    requires: [points]
+    inputs:
+      - name: collectionName
+        type: string
+        default: {from: createCollection.collectionName}
+      - name: points
+        type: PointVectors[]
+        description: Each a qdrant.PointVectors in proto3 JSON, an id and its new vectors
+    outputs:
+      - name: status
+        type: string
+
+  deleteVectors:
+    description: >-
+      Remove named vectors from points, keeping the points and their payloads. The unnamed
+      vector is the one named "". Proven by plans/points/vectors.yaml.
+    adapter: deleteVectors
+    proto: qdrant.Points/DeleteVectors
+    tags: [points, vectors]
+    requires: [points]
+    inputs:
+      - name: collectionName
+        type: string
+        default: {from: createCollection.collectionName}
+      - name: ids
+        type: PointId[]
+      - name: vectorNames
+        type: string[]
+        default: {value: [""]}
+    outputs:
+      - name: status
+        type: string
+
+  setPayload:
+    description: >-
+      Merge values into points' payloads. With `key`, the values go under that key as a nested
+      object instead of at the top level. Proven by plans/points/payload.yaml.
+    adapter: setPayload
+    proto: qdrant.Points/SetPayload
+    tags: [points, payload]
+    requires: [points]
+    inputs:
+      - name: collectionName
+        type: string
+        default: {from: createCollection.collectionName}
+      - name: ids
+        type: PointId[]
+      - name: payload
+        type: Payload
+        description: A map of Qdrant Value messages, as in a point's payload
+      - name: key
+        type: string
+        optional: true
+    outputs:
+      - name: status
+        type: string
+
+  overwritePayload:
+    description: >-
+      Replace points' payloads outright: a key the new payload doesn't have is gone. Proven by
+      plans/points/payload.yaml.
+    adapter: overwritePayload
+    proto: qdrant.Points/OverwritePayload
+    tags: [points, payload]
+    requires: [points]
+    inputs:
+      - name: collectionName
+        type: string
+        default: {from: createCollection.collectionName}
+      - name: ids
+        type: PointId[]
+      - name: payload
+        type: Payload
+    outputs:
+      - name: status
+        type: string
+
+  deletePayload:
+    description: Remove payload keys from points. Proven by plans/points/payload.yaml.
+    adapter: deletePayload
+    proto: qdrant.Points/DeletePayload
+    tags: [points, payload]
+    requires: [points]
+    inputs:
+      - name: collectionName
+        type: string
+        default: {from: createCollection.collectionName}
+      - name: ids
+        type: PointId[]
+      - name: keys
+        type: string[]
+    outputs:
+      - name: status
+        type: string
+
+  clearPayload:
+    description: Remove every payload key from points. Proven by plans/points/payload.yaml.
+    adapter: clearPayload
+    proto: qdrant.Points/ClearPayload
+    tags: [points, payload]
+    requires: [points]
+    inputs:
+      - name: collectionName
+        type: string
+        default: {from: createCollection.collectionName}
+      - name: ids
+        type: PointId[]
+    outputs:
+      - name: status
+        type: string
+
+  updateBatch:
+    description: >-
+      Apply several point operations in one call, in order. Each operation is a oneof (upsert,
+      setPayload, deletePoints, ...), and each gets its own result. Proven by
+      plans/points/update-batch.yaml.
+    adapter: updateBatch
+    proto: qdrant.Points/UpdateBatch
+    tags: [points]
+    requires: [collection]
+    inputs:
+      - name: collectionName
+        type: string
+        default: {from: createCollection.collectionName}
+      - name: operations
+        type: PointsUpdateOperation[]
+    outputs:
+      - name: statuses
+        type: string[]
+      - name: count
+        type: integer
+
+  createFieldIndex:
+    description: >-
+      Index a payload field, which filters, facets, and ordered scrolls use. The field type is an
+      enum whose zero value, FieldTypeKeyword, has to be written out, because the field is
+      optional. Proven by plans/points/indexes.yaml.
+    adapter: createFieldIndex
+    proto: qdrant.Points/CreateFieldIndex
+    tags: [points, indexes]
+    requires: [collection]
+    inputs:
+      - name: collectionName
+        type: string
+        default: {from: createCollection.collectionName}
+      - name: fieldName
+        type: string
+        default: {value: city}
+      - name: fieldType
+        type: enum[FieldTypeKeyword, FieldTypeInteger, FieldTypeFloat, FieldTypeGeo, FieldTypeText, FieldTypeBool, FieldTypeDatetime, FieldTypeUuid]
+        default: {value: FieldTypeKeyword}
+    outputs:
+      - name: status
+        type: string
+      - name: fieldName
+        type: string
+        fromInput: fieldName
+    cleanup:
+      node: deleteFieldIndex
+
+  deleteFieldIndex:
+    description: Drop a payload field's index; the cleanup for createFieldIndex. Proven by plans/points/indexes.yaml.
+    adapter: deleteFieldIndex
+    proto: qdrant.Points/DeleteFieldIndex
+    tags: [points, indexes, cleanup]
+    inputs:
+      - name: collectionName
+        type: string
+        default: {from: createCollection.collectionName}
+      - name: fieldName
+        type: string
+        default: {from: createFieldIndex.fieldName}
+    outputs:
+      - name: status
+        type: string
+
+  createVectorName:
+    description: >-
+      Add a named dense vector to an existing collection. On a collection that had one unnamed
+      vector, the collection's config becomes a map of named vectors, in which the unnamed one is
+      named "". Proven by plans/points/vectors.yaml.
+    adapter: createVectorName
+    proto: qdrant.Points/CreateVectorName
+    tags: [points, vectors]
+    requires: [collection]
+    inputs:
+      - name: collectionName
+        type: string
+        default: {from: createCollection.collectionName}
+      - name: vectorName
+        type: string
+        default: {value: extra}
+      - name: size
+        type: integer
+        default: {value: 2}
+      - name: distance
+        type: enum[Cosine, Euclid, Dot, Manhattan]
+        default: {value: Euclid}
+    outputs:
+      - name: status
+        type: string
+      - name: vectorName
+        type: string
+        fromInput: vectorName
+    cleanup:
+      node: deleteVectorName
+
+  deleteVectorName:
+    description: >-
+      Remove a named vector from a collection and from every point; the cleanup for
+      createVectorName. Proven by plans/points/vectors.yaml.
+    adapter: deleteVectorName
+    proto: qdrant.Points/DeleteVectorName
+    tags: [points, vectors, cleanup]
+    inputs:
+      - name: collectionName
+        type: string
+        default: {from: createCollection.collectionName}
+      - name: vectorName
+        type: string
+        default: {from: createVectorName.vectorName}
+    outputs:
+      - name: status
+        type: string
+
   # --- REST cross-checks -----------------------------------------------------
 
   restGetCollection:
@@ -216,4 +621,33 @@ nodes:
         type: string
       - name: project
         type: string
+        optional: true
+
+  restGetPoint:
+    description: >-
+      GET /collections/{collection_name}/points/{id}: one point over REST. Its id is a plain
+      number or string rather than a oneof, its payload plain JSON, and its unnamed vector a bare
+      list under `vector`. Proven by plans/points/upsert-and-read.yaml.
+    adapter: restGetPoint
+    oas:
+      operationId: get_point
+    tags: [points, rest]
+    requires: [points]
+    inputs:
+      - name: collectionName
+        type: string
+        default: {from: createCollection.collectionName}
+      - name: id
+        type: string
+        default: {value: "1"}
+    outputs:
+      - name: id
+        type: integer
+      - name: city
+        type: string
+        optional: true
+      - name: payload
+        type: Payload
+      - name: vector
+        type: float[]
         optional: true

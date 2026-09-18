@@ -1,0 +1,19 @@
+adapter: restGetPoint
+protocol: http
+
+request:
+  method: GET
+  path: /collections/{{collectionName}}/points/{{id}}
+
+response:
+  # The same point getPoints reads, over REST: the id is a bare number, the payload plain JSON,
+  # and the unnamed vector a bare list under `vector`.
+  extract:
+    id: result.id
+    city:
+      path: result.payload.city
+      optional: true
+    payload: result.payload
+    vector:
+      path: result.vector
+      optional: true

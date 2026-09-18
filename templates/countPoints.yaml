@@ -1,0 +1,15 @@
+adapter: countPoints
+protocol: grpc
+
+request:
+  rpc: qdrant.Points/Count
+  message: |
+    {
+      "collectionName": "{{collectionName}}",
+      "exact": true{{?filter}},
+      "filter": {{filter}}{{/filter}}
+    }
+
+response:
+  extract:
+    count: result.count

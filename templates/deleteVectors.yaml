@@ -1,0 +1,16 @@
+adapter: deleteVectors
+protocol: grpc
+
+request:
+  rpc: qdrant.Points/DeleteVectors
+  message: |
+    {
+      "collectionName": "{{collectionName}}",
+      "wait": true,
+      "pointsSelector": {"points": {"ids": {{ids}}}},
+      "vectors": {"names": {{vectorNames}}}
+    }
+
+response:
+  extract:
+    status: result.status

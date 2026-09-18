@@ -1,0 +1,48 @@
+# A write without `wait` is answered as soon as Qdrant accepts it: Acknowledged, not Completed.
+# The point is there shortly after; the count is polled until it is.
+intent:
+  goal: counted
+  description: An unwaited write is Acknowledged and applied soon after; a waited one is Completed
+
+execution:
+  steps:
+    - id: create
+      node: createCollection
+
+    - id: noWait
+      node: upsertPoints
+      values:
+        wait: false
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: status
+            value: Acknowledged
+          - type: fieldExists
+            path: operationId
+
+    - id: counted
+      node: countPoints
+      isGoal: true
+      dependsOn: [noWait]
+      repeat:
+        until: count == "6"
+        interval: 100ms
+        max: 50
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: count
+            value: "6"
+
+    - id: waited
+      node: upsertPoints
+      dependsOn: [counted]
+      values:
+        points:
+          - {id: {num: "7"}, vectors: {vector: {dense: {data: [1, 1, 1, 1]}}}}
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: status
+            value: Completed

@@ -1,0 +1,31 @@
+adapter: scrollPoints
+protocol: grpc
+
+request:
+  rpc: qdrant.Points/Scroll
+  # The offset is a PointId, a oneof: at most one of the two blocks is sent.
+  message: |
+    {
+      "collectionName": "{{collectionName}}",
+      "limit": {{limit}},
+      "withPayload": {"enable": true}{{?offsetNum}},
+      "offset": {"num": "{{offsetNum}}"}{{/offsetNum}}{{?offsetUuid}},
+      "offset": {"uuid": "{{offsetUuid}}"}{{/offsetUuid}}{{?filter}},
+      "filter": {{filter}}{{/filter}}
+    }
+
+response:
+  extract:
+    ids: result.#.id
+    cities: result.#.payload.city.stringValue
+    count: "result.#"
+    nextPageOffset:
+      path: nextPageOffset
+      optional: true
+    # The cursor, split into the two strings a repeat can send back. On the last page both are "".
+    nextNum:
+      path: nextPageOffset.num
+      default: ""
+    nextUuid:
+      path: nextPageOffset.uuid
+      default: ""

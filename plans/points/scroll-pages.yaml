@@ -1,0 +1,43 @@
+# Scrolling reads points in id order, two at a time here. The cursor, nextPageOffset, is a PointId:
+# a oneof, so it arrives as an object ({"num": "3"}) rather than a string, and it is absent on the
+# last page. AAT's repeat sends back string cursors, so scrollPoints splits it into nextNum and
+# nextUuid; one is set until the last page, where both are "" and the listing ends.
+intent:
+  goal: pages
+  description: Six points read two at a time, following an object cursor to the end
+
+execution:
+  steps:
+    - id: create
+      node: createCollection
+
+    - id: upsert
+      node: upsertPoints
+
+    - id: firstPage
+      node: scrollPoints
+      dependsOn: [upsert]
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: cities
+            value: [Berlin, London]
+          - type: fieldEquals
+            path: nextPageOffset
+            value: {num: "3"}
+          - type: predicate
+            expr: nextNum == "3" && nextUuid == ""
+
+    - id: pages
+      node: scrollPoints
+      isGoal: true
+      dependsOn: [firstPage]
+      repeat:
+        next: {offsetNum: nextNum, offsetUuid: nextUuid}
+        collect: [cities, count]
+        max: 10
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: cities
+            value: [Berlin, London, Moscow, New York, Beijing, Mumbai]

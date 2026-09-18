@@ -9,14 +9,21 @@ request:
 response:
   # uint64 fields (pointsCount, segmentsCount, size, indexingThreshold) arrive as strings. Metadata
   # values are Qdrant Value messages, so a string sits one level down, under stringValue.
+  #
+  # vectorsConfig is a oneof: `params` for a collection with one unnamed vector, `paramsMap` once
+  # it has named ones. The unnamed vector's size and distance are read only in the first case.
   extract:
     status: result.status
     pointsCount:
       path: result.pointsCount
       optional: true
     segmentsCount: result.segmentsCount
-    vectorSize: result.config.params.vectorsConfig.params.size
-    distance: result.config.params.vectorsConfig.params.distance
+    vectorSize:
+      path: result.config.params.vectorsConfig.params.size
+      optional: true
+    distance:
+      path: result.config.params.vectorsConfig.params.distance
+      optional: true
     indexingThreshold: result.config.optimizerConfig.indexingThreshold
     project:
       path: result.config.metadata.project.stringValue
@@ -24,3 +31,15 @@ response:
     note:
       path: result.config.metadata.note.stringValue
       optional: true
+  # The names in the vector map, and the indexed payload fields, are map keys, which extract
+  # rules can't list; the unnamed vector's key in the map is "".
+  transform: |
+    local function keys(t)
+      local out = {}
+      if t then for k, _ in pairs(t) do table.insert(out, k) end end
+      table.sort(out)
+      return out
+    end
+    outputs.vectorNames = keys(json_path("result.config.params.vectorsConfig.paramsMap.map"))
+    outputs.payloadSchema = keys(json_path("result.payloadSchema"))
+    return outputs
