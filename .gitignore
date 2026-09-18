@@ -18,3 +18,7 @@ env.secrets*.yaml
 # OS files
 .DS_Store
 Thumbs.db
+
+# Screenshot tooling
+demos/node_modules/
+demos/out/

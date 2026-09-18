@@ -1,0 +1,9 @@
+{
+  "name": "aat-qdrant-demos",
+  "private": true,
+  "type": "module",
+  "description": "Takes the web UI screenshots in docs/images; run demos/run.sh",
+  "devDependencies": {
+    "playwright": "1.63.0"
+  }
+}

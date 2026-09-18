@@ -36,6 +36,12 @@ filter, and by a point's id; the deprecated `Search` RPC; and the REST query. Th
 points nearest `[0.2, 0.1, 0.9, 0.7]` are New York, Berlin, and Moscow. The collection the plan made
 is gone when it ends.
 
+`aat web view latest` opens the run in the browser. This is the `filtered` step as it was sent: the
+method and the service it went to, the key as metadata, and the message in proto3 JSON, with the
+query's oneof written as its member's key (`nearest`, then `dense`).
+
+![The filtered step's Request tab in the web UI: gRPC qdrant.Points/Query at grpc://localhost:6334, a Copy as grpcurl button, the api-key metadata redacted, and the message with its nearest query and a city filter](docs/images/ui-grpc-request.png)
+
 ## Qdrant in brief
 
 Qdrant is a vector database.
@@ -192,7 +198,9 @@ The plans in `plans/matrix/` set neither input, so a layer group reaches them.
 
 Two plans across four distances and two id kinds make sixteen cells. AAT skips the combinations
 that repeat another: cosine and numeric ids are the graph's defaults, so those layers repeat the
-base run.
+base run. The web UI shows a repeat dimmed, with the result of the run it repeats.
+
+![The layer grid in the web UI's By Test view: two plans down the side, sixteen layer permutations across, every cell passed, the repeats dimmed](docs/images/ui-matrix.png)
 
 ## What Qdrant does over gRPC
 
@@ -341,6 +349,7 @@ seen but not asserted are marked *(observed, not asserted)*.
   `INVALID_ARGUMENT`, each saying what to change. A read over the rate limit is
   `RESOURCE_EXHAUSTED` with `retry-after: 60` in the **trailers**, not the headers —
   [limits/strict-mode](plans/limits/strict-mode.yaml)
+  ![The rate-limited read's Response tab in the web UI: the status RESOURCE_EXHAUSTED with Qdrant's message, and retry-after: 60 among the trailers](docs/images/ui-grpc-refusal.png)
 - **Retrying the way Qdrant asks works.** A retry rule naming `RESOURCE_EXHAUSTED` waits the
   trailer's 60 seconds, and the read then passes —
   [limits/retry-after](plans/limits/retry-after.yaml)
@@ -520,6 +529,8 @@ qdrant.protoset      the descriptor set AAT reads
 openapi/             Qdrant's OpenAPI spec, vendored
 scripts/             up.sh starts the container; mint-jwt.sh signs the local JWTs
 docs/api/            generated: an index with the graph's diagram, and a page per node
+docs/images/         the web UI screenshots above
+demos/               run.sh retakes them against the local container
 ```
 
 ## License
