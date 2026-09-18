@@ -36,6 +36,63 @@ filter, and by a point's id; the deprecated `Search` RPC; and the REST query. Th
 points nearest `[0.2, 0.1, 0.9, 0.7]` are New York, Berlin, and Moscow. The collection the plan made
 is gone when it ends.
 
+## Qdrant in brief
+
+Qdrant is a vector database.
+- An application turns each item it cares about (a document, a product, an image) into a
+  *vector*: a list of numbers, usually from an embedding model, placed so that similar items land
+  near each other.
+- Qdrant stores those vectors and answers "which stored items are nearest to this one?" quickly.
+- That is what semantic search, recommendations, and retrieval for LLM prompts run on.
+
+Its gRPC API is three services, `qdrant.Collections`, `qdrant.Points`, and `qdrant.Snapshots`, and
+the plans use them the way an application would:
+
+| Concept | What it is | Where the plans use it |
+|---|---|---|
+| **Collection** | A named set of points, like a table. It fixes the vector size and the distance that defines "near": cosine, dot product, Euclidean, or Manhattan | Create, read, update, delete: [collections/lifecycle](plans/collections/lifecycle.yaml) |
+| **Point** | One stored item: an id (a number or a UUID), one or more vectors, and a *payload* of JSON-like fields such as `city` or `population` | Upsert, get, scroll, count, delete: [points/upsert-and-read](plans/points/upsert-and-read.yaml) |
+| **Payload index** | An index on a payload field. It makes filters fast, and faceting requires one | [points/payload](plans/points/payload.yaml), [points/indexes](plans/points/indexes.yaml) |
+| **Query** | The nearest neighbours of a vector or a stored point. A query can be narrowed by a payload filter, grouped by a field, fused from several searches, or steered by "like these, unlike those" | `Query` and its batch and group forms, and the older `Search`, `Recommend`, and `Discover`: [query/nearest](plans/query/nearest.yaml) |
+| **Alias** | A second name for a collection, moved atomically, so readers never see a half-built one | [aliases/blue-green](plans/aliases/blue-green.yaml) |
+| **Snapshot** | A backup of one collection or of the whole store | [snapshots/collection](plans/snapshots/collection.yaml) |
+| **Shard key** | In a cluster, the named group of shards a point goes to, such as a tenant or a region | [cluster/shard-keys](cluster/shard-keys.yaml) |
+
+A typical plan follows an application's lifecycle: create a collection, upsert points, query them,
+and delete the collection. The graph's cleanup deletes it even when a step fails. The data is
+Qdrant's own quickstart set: six cities with four-dimensional vectors, small enough to check every
+answer by hand.
+
+## Reading it as a gRPC example
+
+Nothing here requires caring about vectors. Qdrant makes a good gRPC specimen because its protos
+use most of what real protobuf APIs use. The techniques that handle them carry over to any service
+that publishes its protos: Google Cloud's APIs, etcd, Temporal, or your own.
+
+| gRPC concern | In Qdrant | How this project handles it | Carries over to |
+|---|---|---|---|
+| Getting the contract | 17 published `.proto` files | Vendored unchanged and compiled once into a descriptor set ([`proto/build.sh`](proto/build.sh), `--include_imports`). `aat validate` checks every node against it, offline | Any API that publishes protos, or any server with reflection, via `grpcurl -protoset-out` |
+| Writing requests | Deeply nested messages | Templates are proto3 JSON, the same text `grpcurl -d` takes, with placeholders. Validation checks each input where the message puts it | Any gRPC request |
+| proto3 JSON's surprises | 64-bit ids and counts are strings; enums are names; some zero values must be sent anyway | Quoted values in templates and assertions; ordering still compares them as numbers | Every proto3 API |
+| oneofs | Point ids, vectors, query kinds, the scroll cursor | Written as the member's key: `{"num": "1"}`, `{"fusion": "RRF"}` | Any API with union types |
+| Maps and well-known types | Payloads are `map<string, Value>`; snapshot times are `Timestamp` | Extract paths read map keys, and stop at a `Timestamp`, which is a string | Labels, `Struct`, `Timestamp`, and `FieldMask` in Google-style APIs |
+| Client-named resources | A collection is created by name, and the reply is only `true` | The name is an output echoed from the input (`fromInput`), which later steps and the cleanup read | APIs where the caller picks the id or resource name |
+| Errors | Status codes with specific messages | `expectFailure: {status: [NOT_FOUND]}` plus the exact message. A status name tells apart codes that share an HTTP status | Negative tests on any gRPC service |
+| Auth as metadata | An `api-key` header, or a bearer JWT | The environment's auth travels as metadata. Node-name prefixes send a different credential per step | API keys, OAuth tokens, per-tenant credentials |
+| Retry hints | `RESOURCE_EXHAUSTED` with `retry-after` in the trailers | `retry: {on: [RESOURCE_EXHAUSTED]}` waits as long as the trailer asks | Rate-limited services |
+| Pagination | A cursor that is a message, absent on the last page | `repeat.next` follows it (split into strings here) | List RPCs; a plain `page_token` string needs no splitting |
+| One server, two protocols | The same data over gRPC and REST | A few `rest*` nodes read it back over HTTP, checked against the OpenAPI spec | gRPC services fronted by grpc-gateway or HTTP transcoding |
+
+To start a project of your own:
+1. Get a descriptor set: compile the protos with `--include_imports`, or save one from a server's
+   reflection with `grpcurl -protoset-out`.
+2. Give each node `proto: package.Service/Method`.
+3. Write each template's `message:` as the JSON `grpcurl -d` would send.
+4. Route to `grpc://` or `grpcs://`.
+5. Run `aat validate --strict`, which says which paths and fields are wrong before the first call.
+
+AAT's gRPC guide (`docs/user/grpc.md` on the `grpc-support` branch) has the details.
+
 ## Three ways to read this project
 
 1. **A Rosetta stone for Qdrant's gRPC API.** Every template is a working request written in
@@ -46,7 +103,8 @@ is gone when it ends.
    pinned image, each asserting exact results and exact error messages, with cleanup and guards so
    nothing is left behind.
 3. **A demonstration of AAT's gRPC support.** About 5,400 lines of YAML describe a 4,700-line proto
-   surface. Building it led to twelve changes to AAT, each made as the gap turned up.
+   surface. Building it led to twelve changes to AAT, each made as the gap turned up. If you came
+   for gRPC rather than Qdrant, start with [Reading it as a gRPC example](#reading-it-as-a-grpc-example).
 
 The sibling projects drive REST APIs: [aat-duffel](https://github.com/gburgyan/aat-duffel)
 (flights), [aat-stripe](https://github.com/gburgyan/aat-stripe) (payments), and
