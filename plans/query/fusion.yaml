@@ -1,0 +1,34 @@
+# Two prefetched searches fused by reciprocal rank. The fusion is {"fusion": "RRF"}: RRF is the
+# enum's zero value, and a oneof member is sent even when it is zero, so the request says fusion
+# rather than nothing. Berlin, near both query vectors, ranks first.
+intent:
+  goal: fused
+  description: Two searches are fused by reciprocal rank, and the point near both wins
+
+execution:
+  steps:
+    - id: create
+      node: createCollection
+      values:
+        distance: Dot
+
+    - id: upsert
+      node: upsertPoints
+
+    - id: fused
+      node: queryPoints
+      isGoal: true
+      dependsOn: [upsert]
+      values:
+        prefetch:
+          - {query: {nearest: {dense: {data: [0.2, 0.1, 0.9, 0.7]}}}, limit: "3"}
+          - {query: {nearest: {dense: {data: [0.19, 0.81, 0.75, 0.11]}}}, limit: "3"}
+        query: {default: {fusion: RRF}}
+      assertions:
+        mechanical:
+          - type: predicate
+            expr: count == 3 && topScore > 0.666 && topScore < 0.667
+          - type: fieldEquals
+            path: result.0.id.num
+            value: "1"
+            raw: true

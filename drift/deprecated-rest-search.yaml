@@ -1,0 +1,33 @@
+# Qdrant v1.19 took the deprecated REST search, recommend, and discover endpoints out of its OpenAPI
+# spec (the gRPC RPCs are marked deprecated instead), but the server still answers them. This plan
+# pins that: POST /points/search, which openapi/openapi.json doesn't list, answers 200 with the same
+# neighbours as the query endpoint. Its node has no operationId, since the spec has none to give.
+#
+# It sits outside plans/ so a batch never runs it; run it by path.
+intent:
+  goal: search
+  description: The REST search endpoint the v1.19 spec dropped is still served
+
+execution:
+  steps:
+    - id: create
+      node: createCollection
+      values:
+        distance: Dot
+
+    - id: upsert
+      node: upsertPoints
+
+    - id: search
+      node: restSearchPoints
+      isGoal: true
+      dependsOn: [upsert]
+      values:
+        vector: [0.2, 0.1, 0.9, 0.7]
+      assertions:
+        mechanical:
+          - type: status
+            expect: 200
+          - type: fieldEquals
+            path: ids
+            value: [4, 1, 3]

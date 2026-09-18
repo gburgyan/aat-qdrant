@@ -1,0 +1,17 @@
+adapter: recommendBatch
+protocol: grpc
+
+request:
+  rpc: qdrant.Points/RecommendBatch
+  message: |
+    {
+      "collectionName": "{{collectionName}}",
+      "recommendPoints": [
+        {{#recommendations}}{"collectionName": "{{collectionName}}", "positive": {{.positive}}, "limit": "{{.limit}}"}{{/recommendations}}
+      ]
+    }
+
+response:
+  extract:
+    batches: result.#.result.#.id.num
+    count: "result.#"

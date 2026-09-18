@@ -1,0 +1,19 @@
+adapter: facet
+protocol: grpc
+
+request:
+  rpc: qdrant.Points/Facet
+  message: |
+    {
+      "collectionName": "{{collectionName}}",
+      "key": "{{key}}",
+      "limit": "{{limit}}",
+      "exact": true
+    }
+
+response:
+  # A facet value is a oneof; this project facets on strings. Counts are uint64s.
+  extract:
+    values: hits.#.value.stringValue
+    counts: hits.#.count
+    count: "hits.#"

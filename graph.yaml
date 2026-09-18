@@ -596,6 +596,420 @@ nodes:
       - name: status
         type: string
 
+  # --- Search and query ------------------------------------------------------
+
+  queryPoints:
+    description: >-
+      The universal query: nearest neighbours of a vector or a point, a recommendation, discovery,
+      a fusion of prefetched results, and more, each a member of the Query oneof. Without a query it
+      lists points in id order. A fusion is {"fusion": "RRF"}, the enum's zero value, sent because
+      it is a oneof member. Scores are float32, so assert them as ranges. Proven by
+      plans/query/nearest.yaml.
+    adapter: queryPoints
+    proto: qdrant.Points/Query
+    tags: [query]
+    requires: [points]
+    inputs:
+      - name: collectionName
+        type: string
+        default: {from: createCollection.collectionName}
+      - name: query
+        type: Query
+        optional: true
+        description: "A qdrant.Query in proto3 JSON, such as {nearest: {dense: {data: [...]}}}"
+      - name: prefetch
+        type: PrefetchQuery[]
+        optional: true
+      - name: filter
+        type: Filter
+        optional: true
+      - name: limit
+        type: integer
+        default: {value: 3}
+    outputs:
+      - name: nums
+        type: string[]
+        description: The numeric ids of the points found, best first (uint64s, so strings)
+      - name: ids
+        type: PointId[]
+      - name: scores
+        type: float[]
+      - name: cities
+        type: string[]
+      - name: count
+        type: integer
+      - name: topScore
+        type: float
+        optional: true
+
+  queryBatch:
+    description: >-
+      Several queries in one call, each answered on its own. Every query in the batch has to name
+      the collection again: the template writes it into each. Proven by plans/query/batches.yaml.
+    adapter: queryBatch
+    proto: qdrant.Points/QueryBatch
+    tags: [query]
+    requires: [points]
+    inputs:
+      - name: collectionName
+        type: string
+        default: {from: createCollection.collectionName}
+      - name: queries
+        type: QueryItem[]
+        description: Each {query, limit}, as queryPoints takes them
+    outputs:
+      - name: batches
+        type: NumLists
+        description: For each request in the batch, the numeric ids it found, best first
+      - name: count
+        type: integer
+
+  queryGroups:
+    description: >-
+      A query whose results are grouped by a payload field, a few hits per group. A group's key is
+      a GroupId oneof. Proven by plans/query/groups.yaml.
+    adapter: queryGroups
+    proto: qdrant.Points/QueryGroups
+    tags: [query]
+    requires: [points]
+    inputs:
+      - name: collectionName
+        type: string
+        default: {from: createCollection.collectionName}
+      - name: query
+        type: Query
+      - name: groupBy
+        type: string
+        default: {value: country}
+      - name: groupSize
+        type: integer
+        default: {value: 1}
+      - name: limit
+        type: integer
+        default: {value: 2}
+    outputs:
+      - name: groupIds
+        type: string[]
+        description: Each group's key, a GroupId oneof read as its string value
+      - name: hitNums
+        type: NumLists
+        description: The numeric ids in each group, best first
+      - name: count
+        type: integer
+
+  facet:
+    description: >-
+      Count points by the values of a payload field. It needs an index on the field that supports
+      exact matches, such as a keyword index, and says so when there is none. Hits are ordered by
+      count, then by value. Proven by plans/query/facet.yaml.
+    adapter: facet
+    proto: qdrant.Points/Facet
+    tags: [query]
+    requires: [points]
+    inputs:
+      - name: collectionName
+        type: string
+        default: {from: createCollection.collectionName}
+      - name: key
+        type: string
+        default: {value: country}
+      - name: limit
+        type: integer
+        default: {value: 10}
+    outputs:
+      - name: values
+        type: string[]
+      - name: counts
+        type: integer[]
+      - name: count
+        type: integer
+
+  searchMatrixPairs:
+    description: >-
+      For a sample of points, each one's nearest neighbours, as pairs. Proven by
+      plans/query/matrix.yaml.
+    adapter: searchMatrixPairs
+    proto: qdrant.Points/SearchMatrixPairs
+    tags: [query]
+    requires: [points]
+    inputs:
+      - name: collectionName
+        type: string
+        default: {from: createCollection.collectionName}
+      - name: sample
+        type: integer
+        default: {value: 6}
+      - name: limit
+        type: integer
+        default: {value: 1}
+    outputs:
+      - name: count
+        type: integer
+      - name: aNums
+        type: string[]
+      - name: bNums
+        type: string[]
+
+  searchMatrixOffsets:
+    description: >-
+      The same matrix as searchMatrixPairs, as a sparse matrix: row and column offsets into a list
+      of ids, and a score for each. Proven by plans/query/matrix.yaml.
+    adapter: searchMatrixOffsets
+    proto: qdrant.Points/SearchMatrixOffsets
+    tags: [query]
+    requires: [points]
+    inputs:
+      - name: collectionName
+        type: string
+        default: {from: createCollection.collectionName}
+      - name: sample
+        type: integer
+        default: {value: 6}
+      - name: limit
+        type: integer
+        default: {value: 1}
+    outputs:
+      - name: offsetsRow
+        type: string[]
+      - name: offsetsCol
+        type: string[]
+      - name: idNums
+        type: string[]
+      - name: scores
+        type: float[]
+
+  # --- Search and query: the deprecated RPCs --------------------------------
+  # Marked deprecated in the protos in favour of Query, and still served.
+
+  searchPoints:
+    description: >-
+      Nearest neighbours of a vector (deprecated; Query does this). Proven by
+      plans/query/nearest.yaml.
+    adapter: searchPoints
+    proto: qdrant.Points/Search
+    tags: [query, deprecated]
+    requires: [points]
+    inputs:
+      - name: collectionName
+        type: string
+        default: {from: createCollection.collectionName}
+      - name: vector
+        type: float[]
+      - name: limit
+        type: integer
+        default: {value: 3}
+    outputs:
+      - name: nums
+        type: string[]
+        description: The numeric ids of the points found, best first (uint64s, so strings)
+      - name: ids
+        type: PointId[]
+      - name: scores
+        type: float[]
+      - name: cities
+        type: string[]
+      - name: count
+        type: integer
+      - name: topScore
+        type: float
+        optional: true
+
+  searchBatch:
+    description: >-
+      Several searches in one call (deprecated; QueryBatch does this). Each names the collection
+      again. Proven by plans/query/batches.yaml.
+    adapter: searchBatch
+    proto: qdrant.Points/SearchBatch
+    tags: [query, deprecated]
+    requires: [points]
+    inputs:
+      - name: collectionName
+        type: string
+        default: {from: createCollection.collectionName}
+      - name: searches
+        type: SearchItem[]
+        description: Each {vector, limit}
+    outputs:
+      - name: batches
+        type: NumLists
+        description: For each request in the batch, the numeric ids it found, best first
+      - name: count
+        type: integer
+
+  searchGroups:
+    description: Nearest neighbours grouped by a payload field (deprecated; QueryGroups does this). Proven by plans/query/groups.yaml.
+    adapter: searchGroups
+    proto: qdrant.Points/SearchGroups
+    tags: [query, deprecated]
+    requires: [points]
+    inputs:
+      - name: collectionName
+        type: string
+        default: {from: createCollection.collectionName}
+      - name: vector
+        type: float[]
+      - name: groupBy
+        type: string
+        default: {value: country}
+      - name: groupSize
+        type: integer
+        default: {value: 1}
+      - name: limit
+        type: integer
+        default: {value: 2}
+    outputs:
+      - name: groupIds
+        type: string[]
+        description: Each group's key, a GroupId oneof read as its string value
+      - name: hitNums
+        type: NumLists
+        description: The numeric ids in each group, best first
+      - name: count
+        type: integer
+
+  recommendPoints:
+    description: >-
+      Points like some and unlike others (deprecated; a recommend query does this). Proven by
+      plans/query/recommend-and-discover.yaml.
+    adapter: recommendPoints
+    proto: qdrant.Points/Recommend
+    tags: [query, deprecated]
+    requires: [points]
+    inputs:
+      - name: collectionName
+        type: string
+        default: {from: createCollection.collectionName}
+      - name: positive
+        type: PointId[]
+      - name: negative
+        type: PointId[]
+        default: {value: []}
+      - name: limit
+        type: integer
+        default: {value: 2}
+    outputs:
+      - name: nums
+        type: string[]
+        description: The numeric ids of the points found, best first (uint64s, so strings)
+      - name: ids
+        type: PointId[]
+      - name: scores
+        type: float[]
+      - name: cities
+        type: string[]
+      - name: count
+        type: integer
+      - name: topScore
+        type: float
+        optional: true
+
+  recommendBatch:
+    description: Several recommendations in one call (deprecated). Each names the collection again. Proven by plans/query/batches.yaml.
+    adapter: recommendBatch
+    proto: qdrant.Points/RecommendBatch
+    tags: [query, deprecated]
+    requires: [points]
+    inputs:
+      - name: collectionName
+        type: string
+        default: {from: createCollection.collectionName}
+      - name: recommendations
+        type: RecommendItem[]
+        description: Each {positive, limit}
+    outputs:
+      - name: batches
+        type: NumLists
+        description: For each request in the batch, the numeric ids it found, best first
+      - name: count
+        type: integer
+
+  recommendGroups:
+    description: Recommendations grouped by a payload field (deprecated). Proven by plans/query/groups.yaml.
+    adapter: recommendGroups
+    proto: qdrant.Points/RecommendGroups
+    tags: [query, deprecated]
+    requires: [points]
+    inputs:
+      - name: collectionName
+        type: string
+        default: {from: createCollection.collectionName}
+      - name: positive
+        type: PointId[]
+      - name: groupBy
+        type: string
+        default: {value: country}
+      - name: groupSize
+        type: integer
+        default: {value: 1}
+      - name: limit
+        type: integer
+        default: {value: 2}
+    outputs:
+      - name: groupIds
+        type: string[]
+        description: Each group's key, a GroupId oneof read as its string value
+      - name: hitNums
+        type: NumLists
+        description: The numeric ids in each group, best first
+      - name: count
+        type: integer
+
+  discoverPoints:
+    description: >-
+      Points near a target and on the positive side of context pairs (deprecated; a discover query
+      does this). The target is a TargetVector whose only oneof member is `single`. Proven by
+      plans/query/recommend-and-discover.yaml.
+    adapter: discoverPoints
+    proto: qdrant.Points/Discover
+    tags: [query, deprecated]
+    requires: [points]
+    inputs:
+      - name: collectionName
+        type: string
+        default: {from: createCollection.collectionName}
+      - name: target
+        type: VectorExample
+      - name: context
+        type: ContextExamplePair[]
+      - name: limit
+        type: integer
+        default: {value: 2}
+    outputs:
+      - name: nums
+        type: string[]
+        description: The numeric ids of the points found, best first (uint64s, so strings)
+      - name: ids
+        type: PointId[]
+      - name: scores
+        type: float[]
+      - name: cities
+        type: string[]
+      - name: count
+        type: integer
+      - name: topScore
+        type: float
+        optional: true
+
+  discoverBatch:
+    description: Several discoveries in one call (deprecated). Each names the collection again. Proven by plans/query/batches.yaml.
+    adapter: discoverBatch
+    proto: qdrant.Points/DiscoverBatch
+    tags: [query, deprecated]
+    requires: [points]
+    inputs:
+      - name: collectionName
+        type: string
+        default: {from: createCollection.collectionName}
+      - name: discoveries
+        type: DiscoverItem[]
+        description: Each {target, context, limit}
+    outputs:
+      - name: batches
+        type: NumLists
+        description: For each request in the batch, the numeric ids it found, best first
+      - name: count
+        type: integer
+
   # --- REST cross-checks -----------------------------------------------------
 
   restGetCollection:
@@ -651,3 +1065,49 @@ nodes:
       - name: vector
         type: float[]
         optional: true
+
+  restQueryPoints:
+    description: >-
+      POST /collections/{collection_name}/points/query: the nearest-neighbour query over REST, where
+      the query is a bare list of numbers rather than a Query oneof, and the points sit under
+      result.points. Proven by plans/query/nearest.yaml.
+    adapter: restQueryPoints
+    oas:
+      operationId: query_points
+    tags: [query, rest]
+    requires: [points]
+    inputs:
+      - name: collectionName
+        type: string
+        default: {from: createCollection.collectionName}
+      - name: vector
+        type: float[]
+      - name: limit
+        type: integer
+        default: {value: 3}
+    outputs:
+      - name: ids
+        type: integer[]
+      - name: scores
+        type: float[]
+
+  restSearchPoints:
+    description: >-
+      POST /collections/{collection_name}/points/search, the REST search that v1.19's OpenAPI spec
+      no longer lists. The server still answers it, so this node has no operationId to be checked
+      against. Proven by drift/deprecated-rest-search.yaml.
+    adapter: restSearchPoints
+    tags: [query, rest, deprecated]
+    requires: [points]
+    inputs:
+      - name: collectionName
+        type: string
+        default: {from: createCollection.collectionName}
+      - name: vector
+        type: float[]
+      - name: limit
+        type: integer
+        default: {value: 3}
+    outputs:
+      - name: ids
+        type: integer[]

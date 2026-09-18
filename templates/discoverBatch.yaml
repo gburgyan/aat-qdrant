@@ -1,0 +1,17 @@
+adapter: discoverBatch
+protocol: grpc
+
+request:
+  rpc: qdrant.Points/DiscoverBatch
+  message: |
+    {
+      "collectionName": "{{collectionName}}",
+      "discoverPoints": [
+        {{#discoveries}}{"collectionName": "{{collectionName}}", "target": {"single": {{.target}}}, "context": {{.context}}, "limit": "{{.limit}}"}{{/discoveries}}
+      ]
+    }
+
+response:
+  extract:
+    batches: result.#.result.#.id.num
+    count: "result.#"

@@ -1,0 +1,17 @@
+adapter: searchBatch
+protocol: grpc
+
+request:
+  rpc: qdrant.Points/SearchBatch
+  message: |
+    {
+      "collectionName": "{{collectionName}}",
+      "searchPoints": [
+        {{#searches}}{"collectionName": "{{collectionName}}", "vector": {{.vector}}, "limit": "{{.limit}}"}{{/searches}}
+      ]
+    }
+
+response:
+  extract:
+    batches: result.#.result.#.id.num
+    count: "result.#"

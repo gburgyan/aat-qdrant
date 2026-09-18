@@ -1,0 +1,15 @@
+adapter: restQueryPoints
+protocol: http
+
+request:
+  method: POST
+  path: /collections/{{collectionName}}/points/query
+  headers:
+    Content-Type: application/json
+  body: |
+    {"query": {{vector}}, "limit": {{limit}}}
+
+response:
+  extract:
+    ids: result.points.#.id
+    scores: result.points.#.score

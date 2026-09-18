@@ -1,0 +1,27 @@
+adapter: queryPoints
+protocol: grpc
+
+request:
+  rpc: qdrant.Points/Query
+  message: |
+    {
+      "collectionName": "{{collectionName}}",
+      "limit": "{{limit}}",
+      "withPayload": {"enable": true}{{?query}},
+      "query": {{query}}{{/query}}{{?prefetch}},
+      "prefetch": {{prefetch}}{{/prefetch}}{{?filter}},
+      "filter": {{filter}}{{/filter}}
+    }
+
+response:
+  # Scores are float32: 1.2218001 rather than 1.2218. Ids are PointId oneofs; nums reads the
+  # numeric ones.
+  extract:
+    nums: result.#.id.num
+    ids: result.#.id
+    scores: result.#.score
+    cities: result.#.payload.city.stringValue
+    count: "result.#"
+    topScore:
+      path: result.0.score
+      optional: true

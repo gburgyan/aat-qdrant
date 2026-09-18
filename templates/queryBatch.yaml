@@ -1,0 +1,19 @@
+adapter: queryBatch
+protocol: grpc
+
+request:
+  rpc: qdrant.Points/QueryBatch
+  # Each query in a batch must name the collection itself; Qdrant refuses one that doesn't, even
+  # though the batch names it already.
+  message: |
+    {
+      "collectionName": "{{collectionName}}",
+      "queryPoints": [
+        {{#queries}}{"collectionName": "{{collectionName}}", "query": {{.query}}, "limit": "{{.limit}}"}{{/queries}}
+      ]
+    }
+
+response:
+  extract:
+    batches: result.#.result.#.id.num
+    count: "result.#"

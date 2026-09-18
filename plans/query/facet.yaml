@@ -1,0 +1,47 @@
+# Counting points by country. Faceting needs an index on the field that supports exact matches,
+# and Qdrant says so, naming the field; with a keyword index it answers. Every country here has one
+# city, so the counts tie and the hits come in value order.
+intent:
+  goal: facet
+  description: A facet is refused without an index and counts values with one
+
+execution:
+  steps:
+    - id: create
+      node: createCollection
+
+    - id: upsert
+      node: upsertPoints
+
+    - id: noIndex
+      node: facet
+      dependsOn: [upsert]
+      expectFailure:
+        status: [INVALID_ARGUMENT]
+        description: country has no payload index yet
+      assertions:
+        mechanical:
+          - type: predicate
+            expr: >-
+              message == "Wrong input: No appropriate index for faceting: `country`. Please create one to facet on this field. Check https://qdrant.tech/documentation/concepts/indexing/#payload-index to see which payload schemas support Match conditions"
+
+    - id: index
+      node: createFieldIndex
+      dependsOn: [noIndex]
+      values:
+        fieldName: country
+
+    - id: facet
+      node: facet
+      isGoal: true
+      dependsOn: [index]
+      values:
+        limit: 3
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: values
+            value: [China, Germany, India]
+          - type: fieldEquals
+            path: counts
+            value: ["1", "1", "1"]

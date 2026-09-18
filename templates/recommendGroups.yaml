@@ -1,0 +1,19 @@
+adapter: recommendGroups
+protocol: grpc
+
+request:
+  rpc: qdrant.Points/RecommendGroups
+  message: |
+    {
+      "collectionName": "{{collectionName}}",
+      "positive": {{positive}},
+      "groupBy": "{{groupBy}}",
+      "groupSize": {{groupSize}},
+      "limit": {{limit}}
+    }
+
+response:
+  extract:
+    groupIds: result.groups.#.id.stringValue
+    hitNums: result.groups.#.hits.#.id.num
+    count: "result.groups.#"

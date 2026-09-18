@@ -1,0 +1,72 @@
+# Recommendation and discovery, each asked through the Query RPC and through its deprecated RPC,
+# with the same answers.
+#
+# Like Berlin and unlike London gives Moscow, then New York. Discovery near New York, on Berlin's
+# side of the Berlin/London pair, gives Moscow, then Beijing. The deprecated Discover wraps its
+# target in a TargetVector oneof whose only member is `single`.
+intent:
+  goal: discoverOld
+  description: Recommend and discover agree between the Query RPC and the deprecated ones
+
+execution:
+  steps:
+    - id: create
+      node: createCollection
+      values:
+        distance: Dot
+
+    - id: upsert
+      node: upsertPoints
+
+    - id: recommend
+      node: queryPoints
+      dependsOn: [upsert]
+      values:
+        query: {default: {recommend: {positive: [{id: {num: "1"}}], negative: [{id: {num: "2"}}]}}}
+        limit: 2
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: nums
+            value: ["3", "4"]
+
+    - id: recommendOld
+      node: recommendPoints
+      dependsOn: [upsert]
+      values:
+        positive: [{num: "1"}]
+        negative: [{num: "2"}]
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: nums
+            value: ["3", "4"]
+
+    - id: discover
+      node: queryPoints
+      dependsOn: [upsert]
+      values:
+        query:
+          default:
+            discover:
+              target: {id: {num: "4"}}
+              context: {pairs: [{positive: {id: {num: "1"}}, negative: {id: {num: "2"}}}]}
+        limit: 2
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: nums
+            value: ["3", "5"]
+
+    - id: discoverOld
+      node: discoverPoints
+      isGoal: true
+      dependsOn: [upsert]
+      values:
+        target: {default: {id: {num: "4"}}}
+        context: [{positive: {id: {num: "1"}}, negative: {id: {num: "2"}}}]
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: nums
+            value: ["3", "5"]

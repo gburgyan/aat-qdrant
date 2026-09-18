@@ -1,0 +1,19 @@
+adapter: searchMatrixOffsets
+protocol: grpc
+
+request:
+  rpc: qdrant.Points/SearchMatrixOffsets
+  message: |
+    {
+      "collectionName": "{{collectionName}}",
+      "sample": "{{sample}}",
+      "limit": "{{limit}}"
+    }
+
+response:
+  # The offsets are repeated uint64s, so each is a string.
+  extract:
+    offsetsRow: result.offsetsRow
+    offsetsCol: result.offsetsCol
+    idNums: result.ids.#.num
+    scores: result.scores

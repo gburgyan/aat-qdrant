@@ -1,0 +1,20 @@
+adapter: queryGroups
+protocol: grpc
+
+request:
+  rpc: qdrant.Points/QueryGroups
+  message: |
+    {
+      "collectionName": "{{collectionName}}",
+      "query": {{query}},
+      "groupBy": "{{groupBy}}",
+      "groupSize": "{{groupSize}}",
+      "limit": "{{limit}}",
+      "withPayload": {"enable": false}
+    }
+
+response:
+  extract:
+    groupIds: result.groups.#.id.stringValue
+    hitNums: result.groups.#.hits.#.id.num
+    count: "result.groups.#"

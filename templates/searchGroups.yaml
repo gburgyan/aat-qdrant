@@ -1,0 +1,20 @@
+adapter: searchGroups
+protocol: grpc
+
+request:
+  rpc: qdrant.Points/SearchGroups
+  # limit and groupSize are uint32 here, so numbers; in QueryGroups they are uint64, so strings.
+  message: |
+    {
+      "collectionName": "{{collectionName}}",
+      "vector": {{vector}},
+      "groupBy": "{{groupBy}}",
+      "groupSize": {{groupSize}},
+      "limit": {{limit}}
+    }
+
+response:
+  extract:
+    groupIds: result.groups.#.id.stringValue
+    hitNums: result.groups.#.hits.#.id.num
+    count: "result.groups.#"

@@ -1,0 +1,17 @@
+adapter: searchMatrixPairs
+protocol: grpc
+
+request:
+  rpc: qdrant.Points/SearchMatrixPairs
+  message: |
+    {
+      "collectionName": "{{collectionName}}",
+      "sample": "{{sample}}",
+      "limit": "{{limit}}"
+    }
+
+response:
+  extract:
+    count: "result.pairs.#"
+    aNums: result.pairs.#.a.num
+    bNums: result.pairs.#.b.num

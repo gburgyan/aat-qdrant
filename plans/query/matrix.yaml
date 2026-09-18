@@ -1,0 +1,44 @@
+# Each point's nearest neighbour, as a list of pairs and as a sparse matrix. The two describe the
+# same thing: pair i is row i of the matrix, and its column is an offset into the matrix's ids.
+intent:
+  goal: offsets
+  description: The distance matrix comes back as pairs and as offsets, and they agree
+
+execution:
+  steps:
+    - id: create
+      node: createCollection
+      values:
+        distance: Dot
+
+    - id: upsert
+      node: upsertPoints
+
+    - id: pairs
+      node: searchMatrixPairs
+      dependsOn: [upsert]
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: aNums
+            value: ["1", "2", "3", "4", "5", "6"]
+          - type: fieldEquals
+            path: bNums
+            value: ["3", "1", "1", "1", "3", "3"]
+
+    - id: offsets
+      node: searchMatrixOffsets
+      isGoal: true
+      dependsOn: [upsert]
+      description: Moscow, Berlin, Berlin, Berlin, Moscow, Moscow, as offsets into the ids
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: idNums
+            value: ["1", "2", "3", "4", "5", "6"]
+          - type: fieldEquals
+            path: offsetsRow
+            value: ["0", "1", "2", "3", "4", "5"]
+          - type: fieldEquals
+            path: offsetsCol
+            value: ["2", "0", "0", "0", "2", "2"]

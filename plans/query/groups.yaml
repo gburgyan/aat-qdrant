@@ -1,0 +1,56 @@
+# Results grouped by country, one hit per group, asked three ways. A group's key is a GroupId
+# oneof, here its string member. The nearest countries to the quickstart query are the USA and
+# Germany; the ones most like Berlin are Russia and the USA.
+intent:
+  goal: recommendGroups
+  description: Grouped results agree between QueryGroups and the deprecated grouped RPCs
+
+execution:
+  steps:
+    - id: create
+      node: createCollection
+      values:
+        distance: Dot
+
+    - id: upsert
+      node: upsertPoints
+
+    - id: queryGroups
+      node: queryGroups
+      dependsOn: [upsert]
+      values:
+        query: {default: {nearest: {dense: {data: [0.2, 0.1, 0.9, 0.7]}}}}
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: groupIds
+            value: [USA, Germany]
+          - type: fieldEquals
+            path: hitNums
+            value: [["4"], ["1"]]
+
+    - id: searchGroups
+      node: searchGroups
+      dependsOn: [upsert]
+      values:
+        vector: [0.2, 0.1, 0.9, 0.7]
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: groupIds
+            value: [USA, Germany]
+
+    - id: recommendGroups
+      node: recommendGroups
+      isGoal: true
+      dependsOn: [upsert]
+      values:
+        positive: [{num: "1"}]
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: groupIds
+            value: [Russia, USA]
+          - type: fieldEquals
+            path: hitNums
+            value: [["3"], ["4"]]

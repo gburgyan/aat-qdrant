@@ -1,0 +1,70 @@
+# The four batch RPCs, two requests each, answered in order. Every request inside a batch has to
+# name the collection again, even though the batch names it: without it Qdrant refuses the whole
+# batch, naming each request that lacks it. The templates write it in.
+intent:
+  goal: discoverBatch
+  description: QueryBatch and the three deprecated batches answer each request in order
+
+execution:
+  steps:
+    - id: create
+      node: createCollection
+      values:
+        distance: Dot
+
+    - id: upsert
+      node: upsertPoints
+
+    - id: queryBatch
+      node: queryBatch
+      dependsOn: [upsert]
+      values:
+        queries:
+          - {query: {nearest: {dense: {data: [0.2, 0.1, 0.9, 0.7]}}}, limit: 1}
+          - {query: {nearest: {id: {num: "4"}}}, limit: 2}
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: batches
+            value: [["4"], ["1", "3"]]
+
+    - id: searchBatch
+      node: searchBatch
+      dependsOn: [upsert]
+      values:
+        searches:
+          - {vector: [0.2, 0.1, 0.9, 0.7], limit: 1}
+          - {vector: [0.19, 0.81, 0.75, 0.11], limit: 1}
+      assertions:
+        mechanical:
+          - type: predicate
+            expr: count == 2
+          - type: fieldEquals
+            path: batches.0
+            value: ["4"]
+
+    - id: recommendBatch
+      node: recommendBatch
+      dependsOn: [upsert]
+      values:
+        recommendations:
+          - {positive: [{num: "1"}], limit: 1}
+          - {positive: [{num: "4"}], limit: 1}
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: batches
+            value: [["3"], ["1"]]
+
+    - id: discoverBatch
+      node: discoverBatch
+      isGoal: true
+      dependsOn: [upsert]
+      values:
+        discoveries:
+          - {target: {id: {num: "4"}}, context: [{positive: {id: {num: "1"}}, negative: {id: {num: "2"}}}], limit: 1}
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: batches
+            value: [["3"]]

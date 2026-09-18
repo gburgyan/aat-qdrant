@@ -1,0 +1,14 @@
+adapter: restSearchPoints
+protocol: http
+
+request:
+  method: POST
+  path: /collections/{{collectionName}}/points/search
+  headers:
+    Content-Type: application/json
+  body: |
+    {"vector": {{vector}}, "limit": {{limit}}}
+
+response:
+  extract:
+    ids: result.#.id
