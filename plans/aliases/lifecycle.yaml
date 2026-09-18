@@ -1,0 +1,116 @@
+# An alias from creation to deletion. Reads through an alias reach its collection; creating one
+# that already exists succeeds again, and so does deleting one that doesn't exist. An alias to a
+# collection that doesn't exist is NOT_FOUND. Renaming keeps it on the same collection.
+intent:
+  goal: gone
+  description: An alias is created, used, renamed, and deleted, with Qdrant's lenient edges pinned
+
+execution:
+  steps:
+    - id: create
+      node: createCollection
+
+    - id: upsert
+      node: upsertPoints
+
+    - id: alias
+      node: createAlias
+      dependsOn: [upsert]
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: done
+            value: true
+
+    - id: again
+      node: createAlias
+      dependsOn: [alias]
+      description: The same alias a second time, which Qdrant accepts
+      values:
+        aliasName: {fromInput: alias.aliasName}
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: done
+            value: true
+
+    - id: listed
+      node: listCollectionAliases
+      dependsOn: [again]
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: count
+            value: 1
+          - type: fieldEquals
+            path: names.0
+            value: "{{alias.aliasName}}"
+
+    - id: readThrough
+      node: countPoints
+      dependsOn: [listed]
+      description: A count through the alias counts the collection
+      values:
+        collectionName: {fromInput: alias.aliasName}
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: count
+            value: "6"
+
+    - id: rename
+      node: renameAlias
+      dependsOn: [readThrough]
+
+    - id: renamed
+      node: listCollectionAliases
+      dependsOn: [rename]
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: names
+            value: ["{{rename.aliasName}}"]
+
+    - id: nowhere
+      node: createAlias
+      dependsOn: [renamed]
+      values:
+        collectionName: "aat-qdrant-missing-{{random 8}}"
+      expectFailure:
+        status: [NOT_FOUND]
+        description: an alias needs a collection to point at
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: message
+            value: "Not found: Collection `{{collectionName}}` doesn't exist!"
+
+    - id: delete
+      node: deleteAlias
+      dependsOn: [nowhere]
+      values:
+        aliasName: {from: rename.aliasName}
+
+    - id: deleteAgain
+      node: deleteAlias
+      dependsOn: [delete]
+      description: Deleting it again is not an error
+      values:
+        aliasName: {fromInput: delete.aliasName}
+      assertions:
+        mechanical:
+          - type: status
+            expect: OK
+          - type: fieldEquals
+            path: done
+            value: true
+
+    - id: gone
+      node: listCollectionAliases
+      isGoal: true
+      dependsOn: [deleteAgain]
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: count
+            value: 0

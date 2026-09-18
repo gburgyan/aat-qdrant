@@ -1,0 +1,72 @@
+# The reason aliases exist: readers use a stable name while the collection behind it is replaced.
+# One UpdateAliases call deletes the alias and creates it on the new collection, atomically, so no
+# read finds the alias missing. Blue holds six points and green two; a count through the alias
+# says which it is on.
+#
+# The alias is removed with the collections: deleting a collection deletes its aliases.
+intent:
+  goal: onGreen
+  description: An alias is switched from one collection to another in one atomic call
+
+execution:
+  steps:
+    - id: blue
+      node: createCollection
+
+    - id: green
+      node: createCollection
+
+    - id: fillBlue
+      node: upsertPoints
+      values:
+        collectionName: {from: blue.collectionName}
+
+    - id: fillGreen
+      node: upsertPoints
+      values:
+        collectionName: {from: green.collectionName}
+        points:
+          - {id: {num: "1"}, vectors: {vector: {dense: {data: [1, 0, 0, 0]}}}}
+          - {id: {num: "2"}, vectors: {vector: {dense: {data: [0, 1, 0, 0]}}}}
+
+    - id: point
+      node: createAlias
+      dependsOn: [fillBlue, fillGreen]
+      values:
+        collectionName: {from: blue.collectionName}
+
+    - id: onBlue
+      node: countPoints
+      dependsOn: [point]
+      values:
+        collectionName: {fromInput: point.aliasName}
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: count
+            value: "6"
+
+    - id: switch
+      node: updateAliases
+      dependsOn: [onBlue]
+      values:
+        actions:
+          - {deleteAlias: {aliasName: "{{point.aliasName}}"}}
+          - {createAlias: {collectionName: "{{green.collectionName}}", aliasName: "{{point.aliasName}}"}}
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: done
+            value: true
+
+    - id: onGreen
+      node: countPoints
+      isGoal: true
+      dependsOn: [switch]
+      values:
+        collectionName: {fromInput: point.aliasName}
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: count
+            value: "2"

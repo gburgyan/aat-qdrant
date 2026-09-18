@@ -1,0 +1,71 @@
+# A collection snapshot, listed and deleted. Its description's creationTime is a
+# google.protobuf.Timestamp, which proto3 JSON writes as an RFC 3339 string; its size is an int64,
+# written as a string, which still compares as a number. The name starts with the collection's.
+#
+# A collection's snapshots go with it: listing them afterwards is NOT_FOUND, like the collection.
+intent:
+  goal: collectionGone
+  description: A collection snapshot is taken, listed, deleted, and unlistable once the collection goes
+
+execution:
+  steps:
+    - id: create
+      node: createCollection
+
+    - id: upsert
+      node: upsertPoints
+
+    - id: snapshot
+      node: createSnapshot
+      dependsOn: [upsert]
+      assertions:
+        mechanical:
+          - type: predicate
+            expr: size > 0
+          - type: fieldExists
+            path: checksum
+          # RFC 3339 in UTC sorts as a string, so a window compares directly.
+          - type: predicate
+            expr: 'creationTime >= "{{now - 5 minutes}}" && creationTime <= "{{now + 1 minutes}}"'
+
+    - id: listed
+      node: listSnapshots
+      dependsOn: [snapshot]
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: names
+            value: ["{{snapshot.snapshotName}}"]
+
+    - id: delete
+      node: deleteSnapshot
+      dependsOn: [listed]
+      values:
+        snapshotName: {from: snapshot.snapshotName}
+      assertions:
+        mechanical:
+          - type: status
+            expect: OK
+
+    - id: none
+      node: listSnapshots
+      dependsOn: [delete]
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: count
+            value: 0
+
+    - id: dropCollection
+      node: deleteCollection
+      dependsOn: [none]
+
+    - id: collectionGone
+      node: listSnapshots
+      isGoal: true
+      dependsOn: [dropCollection]
+      values:
+        collectionName: {fromInput: create.collectionName}
+      expectFailure:
+        status: [NOT_FOUND]
+        description: the collection, and so its snapshots, are gone

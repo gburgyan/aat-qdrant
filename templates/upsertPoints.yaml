@@ -9,7 +9,8 @@ request:
     {
       "collectionName": "{{collectionName}}",
       "wait": {{wait}},
-      "points": {{points}}
+      "points": {{points}}{{?shardKey}},
+      "shardKeySelector": {"shardKeys": [{"keyword": "{{shardKey}}"}]}{{/shardKey}}
     }
 
 response:

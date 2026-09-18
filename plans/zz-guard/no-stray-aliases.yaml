@@ -1,0 +1,17 @@
+# No alias this project created is still on the server. Every alias it makes is named
+# aat-qdrant-alias-*, and every plan removes its aliases, itself, through the graph's cleanup, or by
+# deleting the collection they point at. Run the batch sequentially.
+intent:
+  goal: aliases
+  description: No alias named aat-qdrant-* is left on the server
+
+execution:
+  steps:
+    - id: aliases
+      node: listAliases
+      isGoal: true
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: ourCount
+            value: 0

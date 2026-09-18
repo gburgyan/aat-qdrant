@@ -1,0 +1,16 @@
+adapter: updateCollectionClusterSetup
+protocol: grpc
+
+request:
+  rpc: qdrant.Collections/UpdateCollectionClusterSetup
+  # The operation is a oneof at the top of the request; a plan sets one of the two.
+  message: |
+    {
+      "collectionName": "{{collectionName}}"{{?createKey}},
+      "createShardKey": {"shardKey": {"keyword": "{{createKey}}"}}{{/createKey}}{{?deleteKey}},
+      "deleteShardKey": {"shardKey": {"keyword": "{{deleteKey}}"}}{{/deleteKey}}
+    }
+
+response:
+  extract:
+    done: result

@@ -1,0 +1,11 @@
+adapter: renameAlias
+protocol: grpc
+
+request:
+  rpc: qdrant.Collections/UpdateAliases
+  message: |
+    {"actions": [{"renameAlias": {"oldAliasName": "{{oldAliasName}}", "newAliasName": "{{aliasName}}"}}]}
+
+response:
+  extract:
+    done: result

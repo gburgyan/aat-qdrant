@@ -83,6 +83,39 @@ nodes:
     cleanup:
       node: deleteCollection
 
+  createCollectionFromConfig:
+    description: >-
+      Create a collection from a vectors config written out in full: named vectors, multivectors,
+      sparse vectors, and custom sharding, which createCollection's size and distance can't
+      express. Like createCollection, it echoes the name it sent and is cleaned up by
+      deleteCollection. Proven by plans/vectors/kinds.yaml.
+    adapter: createCollectionFromConfig
+    proto: qdrant.Collections/Create
+    tags: [collections]
+    inputs:
+      - name: collectionName
+        type: string
+        default: {value: "aat-qdrant-{{random 8}}"}
+      - name: vectorsConfig
+        type: VectorsConfig
+        optional: true
+        description: "A qdrant.VectorsConfig oneof: {params: {...}} or {paramsMap: {map: {...}}}"
+      - name: sparseVectorsConfig
+        type: SparseVectorConfig
+        optional: true
+      - name: shardingMethod
+        type: enum[Auto, Custom]
+        optional: true
+    outputs:
+      - name: created
+        type: boolean
+      - name: collectionName
+        type: string
+        fromInput: collectionName
+    satisfies: [collection]
+    cleanup:
+      node: deleteCollection
+
   getCollection:
     description: >-
       Read a collection's status and configuration. Over gRPC the status is the enum name, `Green`;
@@ -202,6 +235,327 @@ nodes:
       - name: deleted
         type: boolean
 
+  # --- Aliases ---------------------------------------------------------------
+
+  createAlias:
+    description: >-
+      Give a collection a second name that reads and writes go through. Creating an alias that
+      already exists succeeds again. Proven by plans/aliases/lifecycle.yaml.
+    adapter: createAlias
+    proto: qdrant.Collections/UpdateAliases
+    tags: [aliases]
+    requires: [collection]
+    inputs:
+      - name: collectionName
+        type: string
+        default: {from: createCollection.collectionName}
+      - name: aliasName
+        type: string
+        default: {value: "aat-qdrant-alias-{{random 8}}"}
+    outputs:
+      - name: done
+        type: boolean
+      - name: aliasName
+        type: string
+        fromInput: aliasName
+    satisfies: [alias]
+    cleanup:
+      node: deleteAlias
+
+  renameAlias:
+    description: >-
+      Rename an alias. Its cleanup deletes the new name; the old one's cleanup finds nothing to
+      delete, which Qdrant answers with success. Proven by plans/aliases/lifecycle.yaml.
+    adapter: renameAlias
+    proto: qdrant.Collections/UpdateAliases
+    tags: [aliases]
+    requires: [alias]
+    inputs:
+      - name: oldAliasName
+        type: string
+        default: {from: createAlias.aliasName}
+      - name: aliasName
+        type: string
+        default: {value: "aat-qdrant-alias-{{random 8}}"}
+        description: The new name
+    outputs:
+      - name: done
+        type: boolean
+      - name: aliasName
+        type: string
+        fromInput: aliasName
+    cleanup:
+      node: deleteAlias
+
+  deleteAlias:
+    description: >-
+      Remove an alias, leaving its collection. Removing one that doesn't exist also succeeds. The
+      cleanup for createAlias and renameAlias. Proven by plans/aliases/lifecycle.yaml.
+    adapter: deleteAlias
+    proto: qdrant.Collections/UpdateAliases
+    tags: [aliases, cleanup]
+    inputs:
+      - name: aliasName
+        type: string
+        default: {from: createAlias.aliasName}
+    outputs:
+      - name: done
+        type: boolean
+
+  updateAliases:
+    description: >-
+      Apply several alias actions at once, each an AliasOperations oneof (createAlias, renameAlias,
+      deleteAlias), atomically: the way to point an alias at a new collection with no moment in
+      which it points nowhere. Proven by plans/aliases/blue-green.yaml.
+    adapter: updateAliases
+    proto: qdrant.Collections/UpdateAliases
+    tags: [aliases]
+    inputs:
+      - name: actions
+        type: AliasOperations[]
+    outputs:
+      - name: done
+        type: boolean
+
+  listAliases:
+    description: >-
+      Every alias on the server. The transform counts this project's (named aat-qdrant-*), which the
+      guard asserts is zero. Proven by plans/zz-guard/no-stray-aliases.yaml.
+    adapter: listAliases
+    proto: qdrant.Collections/ListAliases
+    tags: [aliases]
+    outputs:
+      - name: names
+        type: string[]
+      - name: count
+        type: integer
+      - name: ourCount
+        type: integer
+
+  listCollectionAliases:
+    description: A collection's aliases. Proven by plans/aliases/lifecycle.yaml.
+    adapter: listCollectionAliases
+    proto: qdrant.Collections/ListCollectionAliases
+    tags: [aliases]
+    requires: [collection]
+    inputs:
+      - name: collectionName
+        type: string
+        default: {from: createCollection.collectionName}
+    outputs:
+      - name: names
+        type: string[]
+      - name: count
+        type: integer
+
+  # --- Cluster and shard keys --------------------------------------------------
+
+  collectionClusterInfo:
+    description: >-
+      A collection's shards and where they live. On a standalone node it is one local shard, shard
+      0, which proto3 JSON writes as a present 0. Proven by plans/cluster/standalone.yaml.
+    adapter: collectionClusterInfo
+    proto: qdrant.Collections/CollectionClusterInfo
+    tags: [cluster]
+    requires: [collection]
+    inputs:
+      - name: collectionName
+        type: string
+        default: {from: createCollection.collectionName}
+    outputs:
+      - name: peerId
+        type: string
+      - name: shardCount
+        type: integer
+      - name: shardIds
+        type: integer[]
+      - name: shardKeys
+        type: string[]
+      - name: pointsCounts
+        type: string[]
+
+  updateCollectionClusterSetup:
+    description: >-
+      Change a collection's cluster layout. The operation is a oneof; this node sends its
+      shard-key members. On a standalone node it is UNIMPLEMENTED. Proven by
+      plans/cluster/standalone.yaml and cluster/shard-keys.yaml.
+    adapter: updateCollectionClusterSetup
+    proto: qdrant.Collections/UpdateCollectionClusterSetup
+    tags: [cluster]
+    requires: [collection]
+    inputs:
+      - name: collectionName
+        type: string
+        default: {from: createCollection.collectionName}
+      - name: createKey
+        type: string
+        optional: true
+        description: A keyword shard key to create
+      - name: deleteKey
+        type: string
+        optional: true
+        description: A keyword shard key to delete
+    outputs:
+      - name: done
+        type: boolean
+
+  createShardKey:
+    description: >-
+      Add a keyword shard key to a custom-sharded collection. It needs cluster mode: on a standalone
+      node it is UNIMPLEMENTED. Proven by cluster/shard-keys.yaml.
+    adapter: createShardKey
+    proto: qdrant.Collections/CreateShardKey
+    tags: [cluster]
+    requires: [collection]
+    inputs:
+      - name: collectionName
+        type: string
+        default: {from: createCollection.collectionName}
+      - name: shardKey
+        type: string
+        default: {value: eu}
+    outputs:
+      - name: created
+        type: boolean
+      - name: shardKey
+        type: string
+        fromInput: shardKey
+    cleanup:
+      node: deleteShardKey
+
+  deleteShardKey:
+    description: Remove a shard key and its shards; the cleanup for createShardKey. Proven by cluster/shard-keys.yaml.
+    adapter: deleteShardKey
+    proto: qdrant.Collections/DeleteShardKey
+    tags: [cluster, cleanup]
+    inputs:
+      - name: collectionName
+        type: string
+        default: {from: createCollection.collectionName}
+      - name: shardKey
+        type: string
+        default: {from: createShardKey.shardKey}
+    outputs:
+      - name: deleted
+        type: boolean
+
+  listShardKeys:
+    description: >-
+      A collection's shard keys. On a standalone node the answer is an empty list, not an error.
+      Proven by plans/cluster/standalone.yaml.
+    adapter: listShardKeys
+    proto: qdrant.Collections/ListShardKeys
+    tags: [cluster]
+    requires: [collection]
+    inputs:
+      - name: collectionName
+        type: string
+        default: {from: createCollection.collectionName}
+    outputs:
+      - name: keys
+        type: string[]
+      - name: count
+        type: integer
+
+  # --- Snapshots ---------------------------------------------------------------
+
+  createSnapshot:
+    description: >-
+      Snapshot one collection. The description's creationTime is a google.protobuf.Timestamp, which
+      arrives as an RFC 3339 string, and its size an int64, as a string. Proven by
+      plans/snapshots/collection.yaml.
+    adapter: createSnapshot
+    proto: qdrant.Snapshots/Create
+    tags: [snapshots]
+    requires: [collection]
+    inputs:
+      - name: collectionName
+        type: string
+        default: {from: createCollection.collectionName}
+    outputs:
+      - name: snapshotName
+        type: string
+      - name: creationTime
+        type: datetime
+      - name: size
+        type: integer
+      - name: checksum
+        type: string
+        optional: true
+    cleanup:
+      node: deleteSnapshot
+
+  listSnapshots:
+    description: >-
+      A collection's snapshots. For a collection that doesn't exist, NOT_FOUND. Proven by
+      plans/snapshots/collection.yaml.
+    adapter: listSnapshots
+    proto: qdrant.Snapshots/List
+    tags: [snapshots]
+    requires: [collection]
+    inputs:
+      - name: collectionName
+        type: string
+        default: {from: createCollection.collectionName}
+    outputs:
+      - name: names
+        type: string[]
+      - name: count
+        type: integer
+
+  deleteSnapshot:
+    description: Delete a collection snapshot; the cleanup for createSnapshot. Proven by plans/snapshots/collection.yaml.
+    adapter: deleteSnapshot
+    proto: qdrant.Snapshots/Delete
+    tags: [snapshots, cleanup]
+    inputs:
+      - name: collectionName
+        type: string
+        default: {from: createCollection.collectionName}
+      - name: snapshotName
+        type: string
+        default: {from: createSnapshot.snapshotName}
+
+  createFullSnapshot:
+    description: >-
+      Snapshot the whole storage, every collection. A full snapshot outlives the collections in it,
+      so it needs a cleanup of its own. Proven by plans/snapshots/full.yaml.
+    adapter: createFullSnapshot
+    proto: qdrant.Snapshots/CreateFull
+    tags: [snapshots]
+    outputs:
+      - name: snapshotName
+        type: string
+      - name: creationTime
+        type: datetime
+      - name: size
+        type: integer
+    cleanup:
+      node: deleteFullSnapshot
+
+  listFullSnapshots:
+    description: >-
+      Every full snapshot. The guard asserts there are none left, which holds on this project's own
+      throwaway container. Proven by plans/zz-guard/no-stray-full-snapshots.yaml.
+    adapter: listFullSnapshots
+    proto: qdrant.Snapshots/ListFull
+    tags: [snapshots]
+    outputs:
+      - name: names
+        type: string[]
+      - name: count
+        type: integer
+
+  deleteFullSnapshot:
+    description: Delete a full snapshot; the cleanup for createFullSnapshot. Proven by plans/snapshots/full.yaml.
+    adapter: deleteFullSnapshot
+    proto: qdrant.Snapshots/DeleteFull
+    tags: [snapshots, cleanup]
+    inputs:
+      - name: snapshotName
+        type: string
+        default: {from: createFullSnapshot.snapshotName}
+
   # --- Points ----------------------------------------------------------------
 
   upsertPoints:
@@ -232,6 +586,10 @@ nodes:
       - name: wait
         type: boolean
         default: {value: true}
+      - name: shardKey
+        type: string
+        optional: true
+        description: The shard key to write to, which a custom-sharded collection requires
     outputs:
       - name: status
         type: string
@@ -315,6 +673,10 @@ nodes:
       - name: filter
         type: Filter
         optional: true
+      - name: shardKey
+        type: string
+        optional: true
+        description: Count only the points under this shard key
     outputs:
       - name: count
         type: integer
@@ -623,6 +985,10 @@ nodes:
       - name: filter
         type: Filter
         optional: true
+      - name: using
+        type: string
+        optional: true
+        description: Which named vector to search; a collection with only named vectors needs one
       - name: limit
         type: integer
         default: {value: 3}

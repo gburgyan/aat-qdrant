@@ -1,0 +1,11 @@
+adapter: deleteFullSnapshot
+protocol: grpc
+
+request:
+  rpc: qdrant.Snapshots/DeleteFull
+  message: |
+    {"snapshotName": "{{snapshotName}}"}
+
+response:
+  # The reply carries only the time the call took; OK is the whole answer.
+  extract: {}

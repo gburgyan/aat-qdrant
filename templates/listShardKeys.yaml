@@ -1,0 +1,12 @@
+adapter: listShardKeys
+protocol: grpc
+
+request:
+  rpc: qdrant.Collections/ListShardKeys
+  message: |
+    {"collectionName": "{{collectionName}}"}
+
+response:
+  extract:
+    keys: shardKeys.#.key.keyword
+    count: "shardKeys.#"

@@ -1,0 +1,16 @@
+adapter: createSnapshot
+protocol: grpc
+
+request:
+  rpc: qdrant.Snapshots/Create
+  message: |
+    {"collectionName": "{{collectionName}}"}
+
+response:
+  extract:
+    snapshotName: snapshotDescription.name
+    creationTime: snapshotDescription.creationTime
+    size: snapshotDescription.size
+    checksum:
+      path: snapshotDescription.checksum
+      optional: true

@@ -1,0 +1,12 @@
+adapter: listSnapshots
+protocol: grpc
+
+request:
+  rpc: qdrant.Snapshots/List
+  message: |
+    {"collectionName": "{{collectionName}}"}
+
+response:
+  extract:
+    names: snapshotDescriptions.#.name
+    count: "snapshotDescriptions.#"

@@ -1,0 +1,126 @@
+# Shard keys, which need cluster mode: run against the one-node cluster, not the standalone node.
+#
+#   scripts/up.sh cluster
+#   aat run plan cluster/shard-keys.yaml --env local-cluster
+#
+# It sits outside plans/ so the batch, which runs on the standalone node, never runs it.
+#
+# A custom-sharded collection refuses a point written without a shard key. Keys come from
+# CreateShardKey and from UpdateCollectionClusterSetup alike, and each becomes a local shard of its
+# own. A count under one key sees only that key's points.
+intent:
+  goal: noKeys
+  description: Shard keys are added two ways, written to, counted by, and removed two ways
+
+execution:
+  steps:
+    - id: create
+      node: createCollectionFromConfig
+      values:
+        vectorsConfig: {default: {params: {size: "4", distance: Dot}}}
+        shardingMethod: Custom
+
+    - id: noKey
+      node: upsertPoints
+      dependsOn: [create]
+      values:
+        collectionName: {from: create.collectionName}
+      expectFailure:
+        status: [INVALID_ARGUMENT]
+        description: a custom-sharded collection needs a shard key on every write
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: message
+            value: "Wrong input: Shard key not specified"
+
+    - id: eu
+      node: createShardKey
+      dependsOn: [noKey]
+      values:
+        collectionName: {from: create.collectionName}
+        shardKey: eu
+
+    - id: us
+      node: updateCollectionClusterSetup
+      dependsOn: [eu]
+      values:
+        collectionName: {from: create.collectionName}
+        createKey: us
+
+    - id: keys
+      node: listShardKeys
+      dependsOn: [us]
+      values:
+        collectionName: {from: create.collectionName}
+      assertions:
+        mechanical:
+          - type: predicate
+            expr: count == 2
+
+    - id: write
+      node: upsertPoints
+      dependsOn: [keys]
+      values:
+        collectionName: {from: create.collectionName}
+        shardKey: eu
+
+    - id: inUs
+      node: countPoints
+      dependsOn: [write]
+      values:
+        collectionName: {from: create.collectionName}
+        shardKey: us
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: count
+            value: "0"
+
+    - id: inAll
+      node: countPoints
+      dependsOn: [write]
+      values:
+        collectionName: {from: create.collectionName}
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: count
+            value: "6"
+
+    - id: info
+      node: collectionClusterInfo
+      dependsOn: [inUs, inAll]
+      values:
+        collectionName: {from: create.collectionName}
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: shardCount
+            value: "2"
+
+    - id: dropUs
+      node: updateCollectionClusterSetup
+      dependsOn: [info]
+      values:
+        collectionName: {from: create.collectionName}
+        deleteKey: us
+
+    - id: dropEu
+      node: deleteShardKey
+      dependsOn: [dropUs]
+      values:
+        collectionName: {from: create.collectionName}
+        shardKey: {from: eu.shardKey}
+
+    - id: noKeys
+      node: listShardKeys
+      isGoal: true
+      dependsOn: [dropEu]
+      values:
+        collectionName: {from: create.collectionName}
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: count
+            value: 0

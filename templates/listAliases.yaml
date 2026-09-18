@@ -1,0 +1,19 @@
+adapter: listAliases
+protocol: grpc
+
+request:
+  rpc: qdrant.Collections/ListAliases
+  message: "{}"
+
+response:
+  extract:
+    names: aliases.#.aliasName
+    count: "aliases.#"
+  # This project's aliases are the ones named aat-qdrant-*.
+  transform: |
+    local ours = 0
+    for _, name in ipairs(json_path("aliases.#.aliasName") or {}) do
+      if string.sub(name, 1, 11) == "aat-qdrant-" then ours = ours + 1 end
+    end
+    outputs.ourCount = ours
+    return outputs

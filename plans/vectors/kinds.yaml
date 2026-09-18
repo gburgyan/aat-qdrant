@@ -1,0 +1,137 @@
+# The vector kinds in one collection: a named dense vector, a multivector compared by MaxSim (a
+# point holds several vectors), and a sparse vector. Each point's vectors come back in a map by
+# name, each value a Vector oneof (dense, multiDense, sparse). A query names the vector it searches
+# with `using`; on a collection of named vectors, leaving it out is INVALID_ARGUMENT for the
+# unnamed vector "" it would mean. Over REST the same vectors are bare arrays and index/value lists.
+intent:
+  goal: rest
+  description: Named dense, multivector, and sparse vectors are written, read, and each searched
+
+execution:
+  steps:
+    - id: create
+      node: createCollectionFromConfig
+      values:
+        vectorsConfig:
+          default:
+            paramsMap:
+              map:
+                image: {size: "4", distance: Dot}
+                colbert: {size: "2", distance: Dot, multivectorConfig: {comparator: MaxSim}}
+        sparseVectorsConfig: {default: {map: {keywords: {}}}}
+
+    - id: upsert
+      node: upsertPoints
+      values:
+        collectionName: {from: create.collectionName}
+        points:
+          - id: {num: "1"}
+            vectors: {vectors: {vectors: {
+              image: {dense: {data: [1, 0, 0, 0]}},
+              colbert: {multiDense: {vectors: [{data: [1, 0]}, {data: [0, 1]}]}},
+              keywords: {sparse: {indices: [3, 7], values: [0.5, 0.25]}}}}}
+          - id: {num: "2"}
+            vectors: {vectors: {vectors: {
+              image: {dense: {data: [0, 1, 0, 0]}},
+              colbert: {multiDense: {vectors: [{data: [0, 1]}]}},
+              keywords: {sparse: {indices: [7], values: [1]}}}}}
+
+    - id: read
+      node: getPoints
+      dependsOn: [upsert]
+      values:
+        collectionName: {from: create.collectionName}
+        withVectors: true
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: result.0.vectors.vectors.vectors.image.dense.data
+            value: [1, 0, 0, 0]
+            raw: true
+          - type: fieldEquals
+            path: result.0.vectors.vectors.vectors.colbert.multiDense.vectors
+            value: [{data: [1, 0]}, {data: [0, 1]}]
+            raw: true
+          - type: fieldEquals
+            path: result.0.vectors.vectors.vectors.keywords.sparse
+            value: {indices: [3, 7], values: [0.5, 0.25]}
+            raw: true
+
+    - id: dense
+      node: queryPoints
+      dependsOn: [upsert]
+      values:
+        collectionName: {from: create.collectionName}
+        query: {default: {nearest: {dense: {data: [0, 1, 0, 0]}}}}
+        using: image
+        limit: 2
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: nums
+            value: ["2", "1"]
+          - type: fieldEquals
+            path: scores
+            value: [1, 0]
+
+    - id: multi
+      node: queryPoints
+      dependsOn: [upsert]
+      values:
+        collectionName: {from: create.collectionName}
+        query: {default: {nearest: {multiDense: {vectors: [{data: [1, 0]}]}}}}
+        using: colbert
+        limit: 2
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: nums
+            value: ["1", "2"]
+
+    - id: sparse
+      node: queryPoints
+      dependsOn: [upsert]
+      description: Only point 1 has index 3, so only it matches
+      values:
+        collectionName: {from: create.collectionName}
+        query: {default: {nearest: {sparse: {indices: [3], values: [1]}}}}
+        using: keywords
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: nums
+            value: ["1"]
+          - type: fieldEquals
+            path: scores
+            value: [0.5]
+
+    - id: noUsing
+      node: queryPoints
+      dependsOn: [upsert]
+      values:
+        collectionName: {from: create.collectionName}
+        query: {default: {nearest: {dense: {data: [0, 1, 0, 0]}}}}
+      expectFailure:
+        status: [INVALID_ARGUMENT]
+        description: with only named vectors, a query must say which
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: message
+            value: "Wrong input: Not existing vector name error: "
+
+    - id: rest
+      node: restGetPoint
+      isGoal: true
+      dependsOn: [upsert]
+      values:
+        collectionName: {from: create.collectionName}
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: result.vector
+            value:
+              image: [1, 0, 0, 0]
+              colbert: [[1, 0], [0, 1]]
+              keywords: {indices: [3, 7], values: [0.5, 0.25]}
+            raw: true

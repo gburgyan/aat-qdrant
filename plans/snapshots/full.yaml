@@ -1,0 +1,43 @@
+# A snapshot of the whole storage. Unlike a collection's, it outlives every collection in it, so
+# it has its own cleanup, and a guard that no full snapshot is left.
+intent:
+  goal: none
+  description: A full snapshot is taken, listed, and deleted
+
+execution:
+  steps:
+    - id: create
+      node: createCollection
+
+    - id: snapshot
+      node: createFullSnapshot
+      dependsOn: [create]
+      assertions:
+        mechanical:
+          - type: predicate
+            expr: size > 0
+
+    - id: listed
+      node: listFullSnapshots
+      dependsOn: [snapshot]
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: names
+            value: ["{{snapshot.snapshotName}}"]
+
+    - id: delete
+      node: deleteFullSnapshot
+      dependsOn: [listed]
+      values:
+        snapshotName: {from: snapshot.snapshotName}
+
+    - id: none
+      node: listFullSnapshots
+      isGoal: true
+      dependsOn: [delete]
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: count
+            value: 0

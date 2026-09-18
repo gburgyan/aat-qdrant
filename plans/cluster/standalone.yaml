@@ -1,0 +1,71 @@
+# What the cluster RPCs do on a standalone node. Cluster info answers: one local shard, shard 0,
+# written as a present 0. Listing shard keys answers with none. Changing the layout or adding a
+# shard key is UNIMPLEMENTED, saying the node is standalone. cluster/shard-keys.yaml runs the same
+# calls against the one-node cluster, where they work.
+intent:
+  goal: noShardKey
+  description: On a standalone node, cluster reads answer and cluster changes are UNIMPLEMENTED
+
+execution:
+  steps:
+    - id: create
+      node: createCollection
+
+    - id: upsert
+      node: upsertPoints
+
+    - id: info
+      node: collectionClusterInfo
+      dependsOn: [upsert]
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: shardCount
+            value: "1"
+          - type: fieldEquals
+            path: shardIds
+            value: [0]
+          - type: fieldEquals
+            path: pointsCounts
+            value: ["6"]
+          - type: fieldEquals
+            path: shardKeys
+            value: []
+
+    - id: keys
+      node: listShardKeys
+      dependsOn: [upsert]
+      assertions:
+        mechanical:
+          - type: status
+            expect: OK
+          - type: fieldEquals
+            path: count
+            value: 0
+
+    - id: setup
+      node: updateCollectionClusterSetup
+      dependsOn: [upsert]
+      values:
+        createKey: eu
+      expectFailure:
+        status: [UNIMPLEMENTED]
+        description: a standalone node has no cluster to set up
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: message
+            value: Qdrant is running in standalone mode
+
+    - id: noShardKey
+      node: createShardKey
+      isGoal: true
+      dependsOn: [upsert]
+      expectFailure:
+        status: [UNIMPLEMENTED]
+        description: shard keys need cluster mode
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: message
+            value: Qdrant is running in standalone mode

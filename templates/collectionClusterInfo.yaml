@@ -1,0 +1,16 @@
+adapter: collectionClusterInfo
+protocol: grpc
+
+request:
+  rpc: qdrant.Collections/CollectionClusterInfo
+  message: |
+    {"collectionName": "{{collectionName}}"}
+
+response:
+  # A shard key is a ShardKey oneof; this project uses keyword keys.
+  extract:
+    peerId: peerId
+    shardCount: shardCount
+    shardIds: localShards.#.shardId
+    shardKeys: localShards.#.shardKey.keyword
+    pointsCounts: localShards.#.pointsCount

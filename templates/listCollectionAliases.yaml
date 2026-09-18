@@ -1,0 +1,12 @@
+adapter: listCollectionAliases
+protocol: grpc
+
+request:
+  rpc: qdrant.Collections/ListCollectionAliases
+  message: |
+    {"collectionName": "{{collectionName}}"}
+
+response:
+  extract:
+    names: aliases.#.aliasName
+    count: "aliases.#"

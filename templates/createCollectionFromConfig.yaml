@@ -1,0 +1,19 @@
+adapter: createCollectionFromConfig
+protocol: grpc
+
+request:
+  rpc: qdrant.Collections/Create
+  message: |
+    {
+      "collectionName": "{{collectionName}}",
+      "metadata": {
+        "project": {"stringValue": "aat-qdrant"}
+      }{{?vectorsConfig}},
+      "vectorsConfig": {{vectorsConfig}}{{/vectorsConfig}}{{?sparseVectorsConfig}},
+      "sparseVectorsConfig": {{sparseVectorsConfig}}{{/sparseVectorsConfig}}{{?shardingMethod}},
+      "shardingMethod": "{{shardingMethod}}"{{/shardingMethod}}
+    }
+
+response:
+  extract:
+    created: result

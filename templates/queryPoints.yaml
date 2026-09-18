@@ -10,7 +10,8 @@ request:
       "withPayload": {"enable": true}{{?query}},
       "query": {{query}}{{/query}}{{?prefetch}},
       "prefetch": {{prefetch}}{{/prefetch}}{{?filter}},
-      "filter": {{filter}}{{/filter}}
+      "filter": {{filter}}{{/filter}}{{?using}},
+      "using": "{{using}}"{{/using}}
     }
 
 response:

@@ -1,0 +1,12 @@
+adapter: createFullSnapshot
+protocol: grpc
+
+request:
+  rpc: qdrant.Snapshots/CreateFull
+  message: "{}"
+
+response:
+  extract:
+    snapshotName: snapshotDescription.name
+    creationTime: snapshotDescription.creationTime
+    size: snapshotDescription.size

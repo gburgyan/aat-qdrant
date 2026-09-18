@@ -1,0 +1,11 @@
+adapter: createShardKey
+protocol: grpc
+
+request:
+  rpc: qdrant.Collections/CreateShardKey
+  message: |
+    {"collectionName": "{{collectionName}}", "request": {"shardKey": {"keyword": "{{shardKey}}"}}}
+
+response:
+  extract:
+    created: result

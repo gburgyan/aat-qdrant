@@ -1,0 +1,11 @@
+adapter: listFullSnapshots
+protocol: grpc
+
+request:
+  rpc: qdrant.Snapshots/ListFull
+  message: "{}"
+
+response:
+  extract:
+    names: snapshotDescriptions.#.name
+    count: "snapshotDescriptions.#"

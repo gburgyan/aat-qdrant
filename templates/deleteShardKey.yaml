@@ -1,0 +1,11 @@
+adapter: deleteShardKey
+protocol: grpc
+
+request:
+  rpc: qdrant.Collections/DeleteShardKey
+  message: |
+    {"collectionName": "{{collectionName}}", "request": {"shardKey": {"keyword": "{{shardKey}}"}}}
+
+response:
+  extract:
+    deleted: result

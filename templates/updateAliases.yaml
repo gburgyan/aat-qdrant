@@ -1,0 +1,11 @@
+adapter: updateAliases
+protocol: grpc
+
+request:
+  rpc: qdrant.Collections/UpdateAliases
+  message: |
+    {"actions": {{actions}}}
+
+response:
+  extract:
+    done: result

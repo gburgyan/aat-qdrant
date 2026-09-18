@@ -1,0 +1,17 @@
+# No full snapshot is left on the server. A full snapshot has no name of ours to look for, but it
+# outlives every collection in it, so on this project's own throwaway container the right number
+# is zero. Against a shared server this guard would need a time window instead.
+intent:
+  goal: fullSnapshots
+  description: No full snapshot is left on the server
+
+execution:
+  steps:
+    - id: fullSnapshots
+      node: listFullSnapshots
+      isGoal: true
+      assertions:
+        mechanical:
+          - type: fieldEquals
+            path: count
+            value: 0

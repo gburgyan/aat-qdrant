@@ -1,0 +1,12 @@
+adapter: createAlias
+protocol: grpc
+
+request:
+  rpc: qdrant.Collections/UpdateAliases
+  # One action; an action is a oneof of createAlias, renameAlias, and deleteAlias.
+  message: |
+    {"actions": [{"createAlias": {"collectionName": "{{collectionName}}", "aliasName": "{{aliasName}}"}}]}
+
+response:
+  extract:
+    done: result

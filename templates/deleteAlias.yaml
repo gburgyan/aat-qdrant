@@ -1,0 +1,11 @@
+adapter: deleteAlias
+protocol: grpc
+
+request:
+  rpc: qdrant.Collections/UpdateAliases
+  message: |
+    {"actions": [{"deleteAlias": {"aliasName": "{{aliasName}}"}}]}
+
+response:
+  extract:
+    done: result
