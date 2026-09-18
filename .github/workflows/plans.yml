@@ -1,0 +1,61 @@
+# Every plan, against the pinned Qdrant, on every push. Nothing here needs a secret: the container
+# is started by the job and the keys are the local ones in compose.yaml.
+#
+# AAT's gRPC support isn't released yet, so aat is built from its grpc-support branch. Once it is,
+# this can download a release instead, as the sibling projects do.
+name: plans
+
+on:
+  push:
+  workflow_dispatch:
+
+env:
+  AAT_REF: grpc-support
+
+jobs:
+  plans:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+
+      - name: Install aat
+        run: |
+          go install "github.com/gburgyan/aat/cmd/aat@${AAT_REF}"
+          aat --version
+
+      - name: Start Qdrant, standalone and the one-node cluster
+        run: scripts/up.sh cluster
+
+      - name: Validate
+        run: aat validate --strict
+
+      - name: Every plan, guards last
+        run: aat run batch --env local
+
+      - name: The layer grid
+        run: |
+          aat run batch matrix --parallel 4 \
+            --layer-group distance-cosine,distance-dot,distance-euclid,distance-manhattan \
+            --layer-group id-num,id-uuid
+
+      - name: Shard keys, on the cluster
+        run: aat run plan cluster/shard-keys.yaml --env local-cluster
+
+      - name: Generated docs are current
+        run: |
+          rm -rf docs/api
+          aat docs generate --graph graph.yaml --split --output docs/api
+          git diff --exit-code -- docs/api
+
+      - name: Keep the archives
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qdrant-runs
+          path: _output/runs
+          retention-days: 14
