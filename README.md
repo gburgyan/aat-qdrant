@@ -1,5 +1,7 @@
 # aat-qdrant
 
+[![plans](https://github.com/gburgyan/aat-qdrant/actions/workflows/plans.yml/badge.svg)](https://github.com/gburgyan/aat-qdrant/actions/workflows/plans.yml)
+
 The [Qdrant](https://qdrant.tech) vector database, driven over its gRPC API, as an
 [AAT](https://github.com/gburgyan/aat) project. AAT is a command-line tool that models an API as a
 graph of operations and runs long, multi-step test plans against it. This project is that graph,
@@ -9,6 +11,13 @@ Every behavior it describes is proven by a plan that asserts it.
 **Status:** all 52 public unary gRPC methods Qdrant serves, 77 nodes, 38 plans that run in about
 70 seconds (60 of them one deliberate wait), 6 layers on two axes, and two plans outside the batch:
 a drift finding and a cluster-only plan.
+
+Every one of those numbers is reproducible from this repository: [CI](.github/workflows/plans.yml)
+starts the pinned container and runs the batch, the layer grid, and the cluster plan on every push,
+and checks the generated docs are current. It needs no secret and no account — the container is the
+API, and the keys are the local ones in `compose.yaml` — so a fork runs it green without asking
+anyone for anything. Each batch is uploaded as a `.aab` and the cluster run as a `.aar`, so what
+Qdrant actually said opens with `aat web view <file>`.
 
 > **Needs AAT v0.3.0 or later,** the first release with gRPC. This project is what that support was
 > stress-tested against; see [How this was built](#how-this-was-built).
@@ -529,6 +538,7 @@ proto/               Qdrant's protos, vendored, and build.sh
 qdrant.protoset      the descriptor set AAT reads
 openapi/             Qdrant's OpenAPI spec, vendored
 scripts/             up.sh starts the container; mint-jwt.sh signs the local JWTs
+.github/workflows/   plans.yml runs everything on every push; no secret needed
 docs/api/            generated: an index with the graph's diagram, and a page per node
 docs/images/         the web UI screenshots above
 demos/               run.sh retakes them against the local container

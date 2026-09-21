@@ -1,10 +1,18 @@
-# Every plan, against the pinned Qdrant, on every push. Nothing here needs a secret: the container
-# is started by the job and the keys are the local ones in compose.yaml.
+# Every plan, against the pinned Qdrant, on every commit. Nothing here needs a secret: the container
+# is started by the job and the keys are the local ones in compose.yaml, so a fork runs this green
+# without being given anything. There is no schedule: the container is pinned, so a nightly run
+# would re-prove what the last commit already proved.
 name: plans
 
 on:
   push:
+  pull_request:
   workflow_dispatch:
+
+# A newer commit on the same ref makes the run in flight irrelevant.
+concurrency:
+  group: plans-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   AAT_VERSION: 0.3.0
@@ -45,10 +53,62 @@ jobs:
           aat docs generate --graph graph.yaml --split --output docs/api
           git diff --exit-code -- docs/api
 
+      # The project's own name, so each file says which API it came from. A batch packs as
+      # a .aab (batch.json at the root, one directory per run), a lone plan as a .aar
+      # (archive.json at the root). Both are what `aat web view` opens directly.
+      - name: Pack the batches and the cluster run
+        id: pack
+        if: always()
+        run: |
+          shopt -s nullglob
+          project=$(sed -n 's/^name:[[:space:]]*//p' aat-project.yaml | head -1 | tr -d "\"'")
+          for dir in _output/runs/batch-*; do
+            [ -f "$dir/batch.json" ] || continue
+            (cd "$dir" && zip -qr "$GITHUB_WORKSPACE/${project}-${dir##*/}.aab" . -i '*.json')
+          done
+          for dir in _output/runs/run-*; do
+            [ -f "$dir/archive.json" ] || continue
+            (cd "$dir" && zip -qr "$GITHUB_WORKSPACE/${project}-${dir##*/}.aar" . -i '*.json')
+          done
+          packed=(./*.aab ./*.aar)
+          if [ ${#packed[@]} -eq 0 ]; then
+            echo "nothing to pack"
+          else
+            ls -l "${packed[@]}"
+          fi
+          echo "artifact=${project}-archives" >> "$GITHUB_OUTPUT"
+
+      - name: Say how to open it
+        if: always()
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          ## Run archives
+
+          Every gRPC call and reply of this run, as AAT recorded it: the method, the
+          message, the status the server sent, and the trailers. With aat 0.3.0 or later
+          on your PATH, and the download unzipped:
+
+          ```
+          aat web view qdrant-batch-<id>.aab     # a batch
+          aat web view qdrant-run-<id>.aar       # the cluster plan
+          ```
+
+          It opens in the browser straight from the file -- in memory, nothing unpacked.
+
+          AAT redacts every credential it sent before writing an archive. The keys this
+          project uses are the local ones in compose.yaml and the JWTs scripts/mint-jwt.sh
+          signs, so nothing here reaches a service that is not the container the job
+          started.
+          EOF
+
+      # A failed run is when these are worth opening most, so they upload either way.
       - name: Keep the archives
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: qdrant-runs
-          path: _output/runs
+          name: ${{ steps.pack.outputs.artifact }}
+          path: |
+            ./*.aab
+            ./*.aar
+          if-no-files-found: warn
           retention-days: 14
