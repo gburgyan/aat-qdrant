@@ -15,7 +15,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  AAT_VERSION: 0.3.0
+  AAT_VERSION: 0.3.2
 
 jobs:
   plans:
